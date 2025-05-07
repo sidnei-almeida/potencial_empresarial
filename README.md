@@ -22,8 +22,8 @@ O objetivo é construir um modelo que classifique empresas em diferentes classes
 - **Python 3.10+**
 - `pandas`, `numpy`, `matplotlib`, `seaborn`
 - `scikit-learn`, `xgboost`
-- `Streamlit` (para frontend da API)
 - `FastAPI`
+- `uvicorn`
 
 ---
 
