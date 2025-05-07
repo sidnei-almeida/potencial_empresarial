@@ -77,7 +77,7 @@ O objetivo é construir um modelo que classifique empresas em diferentes classes
 
 ---
 
-## 🌐 Como Executar
+## 🌐 Como Baixar
 
 ### 1. Clone o repositório
 
