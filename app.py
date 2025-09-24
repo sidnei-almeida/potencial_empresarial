@@ -7,7 +7,64 @@ from plotly.subplots import make_subplots
 import joblib
 from streamlit_option_menu import option_menu
 import warnings
+import requests
+import os
+from pathlib import Path
+import tempfile
 warnings.filterwarnings('ignore')
+
+# Configurações do GitHub
+GITHUB_USERNAME = "sidnei-almeida"
+GITHUB_REPO = "potencial_empresarial"
+GITHUB_BRANCH = "main"
+GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_REPO}/{GITHUB_BRANCH}"
+
+# URLs dos arquivos no GitHub
+DATA_URL = f"{GITHUB_BASE_URL}/dados/data.csv"
+POTENCIAL_URL = f"{GITHUB_BASE_URL}/dados/portencial_empresarial.csv"
+MODEL_URL = f"{GITHUB_BASE_URL}/modelos/Random_Forest_model.joblib"
+
+@st.cache_data
+def download_file_from_github(url: str, filename: str) -> str:
+    """
+    Baixa um arquivo do GitHub e retorna o caminho local
+    """
+    try:
+        # Criar diretório temporário se não existir
+        temp_dir = Path(tempfile.gettempdir()) / "potencial_empresarial"
+        temp_dir.mkdir(exist_ok=True)
+        
+        file_path = temp_dir / filename
+        
+        # Verificar se o arquivo já existe e é recente (cache de 1 hora)
+        if file_path.exists():
+            file_age = os.path.getmtime(file_path)
+            current_time = os.path.getmtime(file_path)
+            if (current_time - file_age) < 3600:  # 1 hora em segundos
+                return str(file_path)
+        
+        # Baixar arquivo do GitHub
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        # Salvar arquivo
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+        
+        return str(file_path)
+        
+    except Exception as e:
+        st.error(f"Erro ao baixar {filename} do GitHub: {str(e)}")
+        return None
+
+@st.cache_data
+def check_github_connection():
+    """Verifica se a conexão com o GitHub está funcionando"""
+    try:
+        response = requests.get(f"https://github.com/{GITHUB_USERNAME}/{GITHUB_REPO}", timeout=10)
+        return response.status_code == 200
+    except:
+        return False
 
 # Configuração da página
 st.set_page_config(
@@ -211,27 +268,71 @@ st.markdown("""
 
 @st.cache_data
 def load_data():
-    """Carrega os dados das empresas"""
+    """Carrega os dados das empresas do GitHub ou localmente"""
     try:
-        # Carregar dados principais
-        df = pd.read_csv('dados/data.csv')
+        df = None
+        df_potencial = None
+        
+        # Tentar carregar localmente primeiro
+        try:
+            if os.path.exists('dados/data.csv'):
+                df = pd.read_csv('dados/data.csv')
+                st.info("📁 Dados carregados localmente")
+            else:
+                # Baixar do GitHub
+                st.info("🌐 Baixando dados do GitHub...")
+                data_path = download_file_from_github(DATA_URL, "data.csv")
+                if data_path:
+                    df = pd.read_csv(data_path)
+                    st.success("✅ Dados baixados com sucesso do GitHub")
+                else:
+                    st.error("❌ Erro ao baixar dados do GitHub")
+                    return None, None
+        except Exception as e:
+            st.error(f"Erro ao carregar dados principais: {e}")
+            return None, None
         
         # Carregar dados de potencial empresarial se disponível
         try:
-            df_potencial = pd.read_csv('dados/portencial_empresarial.csv')
-            return df, df_potencial
+            if os.path.exists('dados/portencial_empresarial.csv'):
+                df_potencial = pd.read_csv('dados/portencial_empresarial.csv')
+            else:
+                # Tentar baixar do GitHub
+                potencial_path = download_file_from_github(POTENCIAL_URL, "portencial_empresarial.csv")
+                if potencial_path:
+                    df_potencial = pd.read_csv(potencial_path)
         except:
-            return df, None
+            df_potencial = None
+        
+        return df, df_potencial
+        
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
         return None, None
 
 @st.cache_resource
 def load_model():
-    """Carrega o modelo treinado"""
+    """Carrega o modelo treinado do GitHub ou localmente"""
     try:
-        model = joblib.load('modelos/Random_Forest_model.joblib')
+        model = None
+        
+        # Tentar carregar localmente primeiro
+        if os.path.exists('modelos/Random_Forest_model.joblib'):
+            model = joblib.load('modelos/Random_Forest_model.joblib')
+            st.info("📁 Modelo carregado localmente")
+        else:
+            # Baixar do GitHub
+            st.info("🌐 Baixando modelo do GitHub...")
+            model_path = download_file_from_github(MODEL_URL, "Random_Forest_model.joblib")
+            if model_path:
+                model = joblib.load(model_path)
+                st.success("✅ Modelo baixado com sucesso do GitHub")
+            else:
+                st.error("❌ Erro ao baixar modelo do GitHub")
+                return None
+        
         return model
+        
     except Exception as e:
         st.error(f"Erro ao carregar modelo: {e}")
         return None
@@ -242,11 +343,12 @@ def show_system_status(model, df):
     # Status do Modelo
     model_status = "✅ Carregado" if model is not None else "❌ Erro"
     model_color = "#FF6B35" if model is not None else "#FF6B6B"
+    model_source = "Local" if os.path.exists('modelos/Random_Forest_model.joblib') else "GitHub"
     
     st.markdown(f"""
     <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {model_color};">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">🤖 Modelo Random Forest</span>
+            <span style="color: #FAFAFA; font-weight: 600;">🤖 Modelo Random Forest ({model_source})</span>
             <span style="color: {model_color}; font-weight: 700;">{model_status}</span>
         </div>
     </div>
@@ -255,12 +357,26 @@ def show_system_status(model, df):
     # Status dos Dados
     data_status = "✅ Carregado" if df is not None else "❌ Erro"
     data_color = "#FF6B35" if df is not None else "#FF6B6B"
+    data_source = "Local" if os.path.exists('dados/data.csv') else "GitHub"
     
     st.markdown(f"""
     <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {data_color};">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">📊 Dataset Empresas</span>
+            <span style="color: #FAFAFA; font-weight: 600;">📊 Dataset Empresas ({data_source})</span>
             <span style="color: {data_color}; font-weight: 700;">{data_status}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Status da Conexão GitHub
+    github_status = "✅ Conectado" if check_github_connection() else "⚠️ Sem conexão"
+    github_color = "#FF6B35" if check_github_connection() else "#FFD23F"
+    
+    st.markdown(f"""
+    <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {github_color};">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #FAFAFA; font-weight: 600;">🌐 GitHub Connection</span>
+            <span style="color: {github_color}; font-weight: 700;">{github_status}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -447,6 +563,11 @@ def show_home_page(df, df_potencial, model):
             Este projeto implementa um <strong>sistema de análise de potencial de crescimento empresarial</strong> utilizando 
             <strong>Machine Learning</strong> com Random Forest. O objetivo é classificar empresas em diferentes níveis de 
             potencial de crescimento baseado em indicadores financeiros e econômicos.
+        </p>
+        <p style="font-size: 0.7rem; line-height: 1.4; margin: 0.5rem 0 0 0; color: #B0B0B0;">
+            <strong>🌐 Fonte dos Dados:</strong> Os dados e modelo são carregados automaticamente do GitHub 
+            (<a href="https://github.com/sidnei-almeida/potencial_empresarial" target="_blank" style="color: #FF6B35;">sidnei-almeida/potencial_empresarial</a>) 
+            quando não estão disponíveis localmente.
         </p>
     </div>
     """, unsafe_allow_html=True)

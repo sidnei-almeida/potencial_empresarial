@@ -49,10 +49,11 @@ Uma aplicação web interativa construída com Streamlit para análise inteligen
 
 ## 📦 Instalação
 
+### Método 1: Clone Completo (Recomendado)
 1. Clone o repositório:
 ```bash
-git clone <repository-url>
-cd tcc_streamlit
+git clone https://github.com/sidnei-almeida/potencial_empresarial.git
+cd potencial_empresarial
 ```
 
 2. Crie um ambiente virtual (opcional, mas recomendado):
@@ -67,6 +68,25 @@ venv\Scripts\activate  # Windows
 ```bash
 pip install -r requirements.txt
 ```
+
+### Método 2: Apenas o App (Download Automático)
+1. Baixe apenas o arquivo `app.py` e `requirements.txt`:
+```bash
+wget https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/app.py
+wget https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/requirements.txt
+```
+
+2. Instale as dependências:
+```bash
+pip install -r requirements.txt
+```
+
+3. Execute o app:
+```bash
+streamlit run app.py
+```
+
+> **💡 Nota:** Com o Método 2, os dados e modelo são baixados automaticamente do GitHub quando necessário!
 
 ## 🚀 Como Usar
 
@@ -235,9 +255,30 @@ O modelo Random Forest foi treinado com 15 features:
 - **Fundo Secundário**: #1E1E1E (Cinza escuro)
 - **Texto**: #FAFAFA (Branco claro)
 
+## 🌐 Integração com GitHub
+
+Este projeto está totalmente integrado com o GitHub para facilitar o uso e distribuição:
+
+### 📥 Download Automático
+- **Dados e Modelo**: São baixados automaticamente do GitHub quando não estão disponíveis localmente
+- **Cache Inteligente**: Arquivos são armazenados temporariamente por 1 hora para evitar downloads repetidos
+- **Fallback**: Se não houver conexão com o GitHub, o app tenta usar arquivos locais
+- **Status em Tempo Real**: Interface mostra a fonte dos dados (Local/GitHub) e status da conexão
+
+### 🔗 URLs do Repositório
+- **Repositório**: https://github.com/sidnei-almeida/potencial_empresarial
+- **Dados**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/dados/data.csv
+- **Modelo**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/modelos/Random_Forest_model.joblib
+
+### 🚀 Deploy Simples
+Agora você pode compartilhar apenas o arquivo `app.py` e o app funcionará automaticamente, baixando todos os recursos necessários do GitHub!
+
 ## 📝 Notas Importantes
 
-- Certifique-se de que os arquivos `data.csv` e `Random_Forest_model.joblib` estão presentes
+- **Arquivos Locais**: Se os arquivos `data.csv` e `Random_Forest_model.joblib` estão presentes localmente, eles serão usados
+- **Download Automático**: Se não estiverem presentes, serão baixados automaticamente do GitHub
+- **Conexão**: Requer conexão com a internet para download inicial dos recursos
+- **Cache**: Arquivos baixados são armazenados temporariamente para melhor performance
 - O modelo foi treinado com dados pré-processados e normalizados
 - A aplicação verifica automaticamente a disponibilidade dos componentes
 - Todas as visualizações são otimizadas para o tema escuro
