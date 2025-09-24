@@ -21,7 +21,6 @@ GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_
 
 # URLs dos arquivos no GitHub
 DATA_URL = f"{GITHUB_BASE_URL}/dados/data.csv"
-POTENCIAL_URL = f"{GITHUB_BASE_URL}/dados/portencial_empresarial.csv"
 MODEL_URL = f"{GITHUB_BASE_URL}/modelos/Random_Forest_model.joblib"
 
 @st.cache_data
@@ -271,7 +270,6 @@ def load_data():
     """Carrega os dados das empresas do GitHub ou localmente"""
     try:
         df = None
-        df_potencial = None
         
         # Tentar carregar localmente primeiro
         try:
@@ -289,22 +287,10 @@ def load_data():
                     st.error("❌ Erro ao baixar dados do GitHub")
                     return None, None
         except Exception as e:
-            st.error(f"Erro ao carregar dados principais: {e}")
+            st.error(f"Erro ao carregar dados: {e}")
             return None, None
         
-        # Carregar dados de potencial empresarial se disponível
-        try:
-            if os.path.exists('dados/portencial_empresarial.csv'):
-                df_potencial = pd.read_csv('dados/portencial_empresarial.csv')
-            else:
-                # Tentar baixar do GitHub
-                potencial_path = download_file_from_github(POTENCIAL_URL, "portencial_empresarial.csv")
-                if potencial_path:
-                    df_potencial = pd.read_csv(potencial_path)
-        except:
-            df_potencial = None
-        
-        return df, df_potencial
+        return df, None  # Sempre retorna None para df_potencial pois não é mais usado
         
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")

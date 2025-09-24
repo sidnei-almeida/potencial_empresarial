@@ -126,8 +126,7 @@ tcc_streamlit/
 ├── .streamlit/
 │   └── config.toml                 # Configuração do tema escuro
 ├── dados/
-│   ├── data.csv                   # Dataset principal das empresas
-│   └── portencial_empresarial.csv # Dados de potencial (se disponível)
+│   └── data.csv                   # Dataset principal das empresas
 ├── modelos/
 │   ├── Random_Forest_model.joblib # Modelo treinado (Random Forest)
 │   └── Random_Forest_model.pkl    # Modelo em formato alternativo
