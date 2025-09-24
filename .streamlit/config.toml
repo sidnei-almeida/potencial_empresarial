@@ -1,0 +1,20 @@
+[theme]
+# Configuração do tema escuro para o Streamlit
+primaryColor = "#FF6B35"        # Cor primária (laranja quente)
+backgroundColor = "#0E1117"      # Cor de fundo (escuro)
+secondaryBackgroundColor = "#1E1E1E"  # Cor de fundo secundária (cinza escuro)
+textColor = "#FAFAFA"            # Cor do texto (branco claro)
+
+[server]
+# Configurações do servidor
+port = 8501
+address = "0.0.0.0"
+headless = true
+
+[browser]
+# Configurações do navegador
+gatherUsageStats = false
+
+[global]
+# Configurações globais
+developmentMode = false

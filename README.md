@@ -1,86 +1,255 @@
-# 📈 Análise Preditiva do Potencial de Crescimento de Empresas
+# Potencial de Crescimento Empresarial 🚀
 
-Este repositório apresenta uma solução de *machine learning* que combina **agrupamento não supervisionado (KMeans)** e **classificação supervisionada (XGBoost)** para prever o *potencial de crescimento (PC)* de empresas do continente americano, com base em dados financeiros e macroeconômicos. O projeto inclui uma **API pronta para deploy** em websites ou aplicações interativas.
+Uma aplicação web interativa construída com Streamlit para análise inteligente do potencial de crescimento de empresas, baseada em indicadores financeiros e macroeconômicos usando Machine Learning.
 
-🔗 [Acesse o repositório](https://github.com/sidnei-almeida/potencial_empresarial)
+## 🌟 Funcionalidades
 
----
+### 1. Dashboard Interativo 📊
+- Interface elegante com tema escuro e cores quentes
+- Menu de navegação premium com ícones e animações
+- Métricas em tempo real com visualizações premium
+- Status do sistema em tempo real
+- Navegação intuitiva entre seções
 
-## 🧠 Objetivo do Projeto
+### 2. Análise de Dados 📈
+- Estatísticas gerais das empresas
+- Distribuição geográfica (Top 10 países)
+- Análise de potencial de crescimento por categoria
+- Visualizações interativas com Plotly
 
-O objetivo é construir um modelo que classifique empresas em diferentes classes de **potencial de crescimento**, utilizando dados estruturados. Para isso:
+### 3. Informações do Modelo 🤖
+- Parâmetros detalhados do Random Forest
+- Importância das features (variáveis mais relevantes)
+- Métricas de performance do modelo
 
-- Foi feita uma análise exploratória dos dados.
-- As empresas foram agrupadas usando **KMeans**, criando uma variável-alvo (`pc_class`).
-- Essa variável foi utilizada em modelos de classificação supervisionada.
-- O **XGBoost** foi o algoritmo com melhor desempenho.
+### 4. Predições Inteligentes 🔮
+- **Predição Individual**: Seleção por país e empresa do dataset
+- **Predição por Campos (SPA)**: Formulário interativo para entrada manual de dados
+- **Predição em Lote**: Upload de CSV para análise em massa
+- **Template de Dados**: Download de template para predições em lote
+- **Interpretação de Resultados**: Análise detalhada com níveis de confiança
+- **Visualizações**: Gráficos de probabilidades e distribuição
 
----
+### 5. Insights Avançados 💡
+- **🌍 Análise Geográfica**: Distribuição por países, mapas de calor, análise regional detalhada
+- **📊 Análise Financeira**: Box plots, violin plots, estatísticas por potencial de crescimento
+- **🔍 Correlações**: Matriz de correlação completa, correlações específicas com potencial
+- **📈 Tendências**: Scatter plots interativos, análise de clusters com K-means
+- **🎯 Insights Avançados**: Análise de outliers, recomendações baseadas em dados, resumo executivo
 
-## 🧰 Tecnologias e Ferramentas
+## 🛠️ Tecnologias Utilizadas
 
-- **Python 3.10+**
-- `pandas`, `numpy`, `matplotlib`, `seaborn`
-- `scikit-learn`, `xgboost`
-- `FastAPI`
-- `uvicorn`
+- **Python 3.x**
+- **Streamlit**: Interface web interativa
+- **Streamlit Option Menu**: Menu de navegação elegante
+- **Plotly**: Visualizações interativas
+- **Pandas**: Manipulação de dados
+- **Scikit-learn**: Modelo de Machine Learning (Random Forest)
+- **Joblib**: Serialização do modelo
 
----
+## 📦 Instalação
 
-## 🗃️ Estrutura do Repositório
-
-📦 potencial_empresarial/
-┣ 📂 data/ # Datasets utilizados (financeiros e macroeconômicos)
-┣ 📂 notebooks/ # Jupyter Notebooks com EDA, modelagem e validação
-┣ 📂 models/ # Modelos treinados e salvos (.pkl)
-┣ 📂 api/ # API com Streamlit ou Flask
-┣ 📄 requirements.txt # Dependências do projeto
-┣ 📄 README.md # Este arquivo
-┗ 📄 .gitignore
-
----
-
-## 📊 Pipeline do Projeto
-
-1. **Coleta de Dados**
-   - Dados financeiros de empresas: dividend yield, revenue, P/E ratio, market cap, earnings.
-   - Dados macroeconômicos via APIs: PIB per capita, taxa de crescimento, juros, câmbio, desemprego, inflação.
-
-2. **Análise Exploratória (EDA)**
-   - Verificação de distribuições, outliers, correlações.
-   - Visualização com `seaborn` e `matplotlib`.
-
-3. **Pré-processamento**
-   - Normalização e preenchimento de valores nulos.
-   - Criação de novas variáveis derivadas (feature engineering).
-
-4. **Clusterização com KMeans**
-   - Agrupamento das empresas em 4 clusters (0 a 3) com base em características financeiras.
-   - Essa variável foi renomeada como `pc_class` e usada como *target* para os classificadores.
-
-5. **Modelagem Supervisionada**
-   - Algoritmos testados: Decision Tree, Logistic Regression, KNN, SVM, Random Forest e XGBoost.
-   - Melhor desempenho: **XGBoost** com alta acurácia e F1-Score.
-   - Avaliação com matriz de confusão e curva ROC.
-
-6. **Deploy da API**
-   - Aplicação web com **Streamlit**, permitindo ao usuário inserir dados e obter a previsão do potencial de crescimento.
-   - Endpoint da API para integração com outros sistemas.
-
----
-
-## 📈 Principais Resultados
-
-- **XGBoost** teve os melhores resultados entre os modelos supervisionados.
-- A clusterização inicial com **KMeans** ajudou a reduzir ruído e criar rótulos coerentes.
-- O modelo foi encapsulado em uma API leve e responsiva.
-
----
-
-## 🌐 Como Baixar
-
-### 1. Clone o repositório
-
+1. Clone o repositório:
 ```bash
-git clone https://github.com/sidnei-almeida/potencial_empresarial.git
-cd potencial_empresarial
+git clone <repository-url>
+cd tcc_streamlit
+```
+
+2. Crie um ambiente virtual (opcional, mas recomendado):
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate  # Windows
+```
+
+3. Instale as dependências:
+```bash
+pip install -r requirements.txt
+```
+
+## 🚀 Como Usar
+
+### Método 1: Script Automatizado (Recomendado)
+```bash
+./run_app.sh
+```
+
+### Método 2: Execução Manual
+1. Ative o ambiente virtual:
+```bash
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate     # Windows
+```
+
+2. Execute a aplicação:
+```bash
+streamlit run app.py
+```
+
+3. Acesse a aplicação no navegador (geralmente em http://localhost:8501)
+
+### Método 3: Execução Direta
+```bash
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+## 📁 Estrutura de Arquivos
+
+```
+tcc_streamlit/
+├── app.py                          # Aplicação principal Streamlit
+├── run_app.sh                      # Script de execução automatizado
+├── requirements.txt                # Dependências Python
+├── README.md                       # Documentação
+├── .streamlit/
+│   └── config.toml                 # Configuração do tema escuro
+├── dados/
+│   ├── data.csv                   # Dataset principal das empresas
+│   └── portencial_empresarial.csv # Dados de potencial (se disponível)
+├── modelos/
+│   ├── Random_Forest_model.joblib # Modelo treinado (Random Forest)
+│   └── Random_Forest_model.pkl    # Modelo em formato alternativo
+└── pipeline/
+    └── classification_pipeline.py # Pipeline de classificação
+```
+
+## 🔮 Funcionalidades de Predição
+
+### 🏢 Predição Individual
+- Seleção de empresa existente no dataset
+- Análise baseada em dados reais
+- Visualização de informações da empresa
+- Resultados com gráficos de probabilidades
+
+### 📊 Predição por Campos (SPA)
+- **Single Page Application** com formulário interativo
+- Campos para todos os indicadores financeiros e macroeconômicos
+- Validação de entrada em tempo real
+- Análise personalizada com interpretação detalhada
+- Níveis de confiança da predição
+
+### 📋 Predição em Lote
+- Upload de arquivo CSV com múltiplas empresas
+- Template de dados disponível para download
+- Validação automática de colunas obrigatórias
+- Processamento em massa com estatísticas consolidadas
+- Download dos resultados completos
+
+## 🔍 Funcionalidades de Insights Avançados
+
+### 🌍 Análise Geográfica
+- **Distribuição por Países**: Top 10 países por número de empresas e potencial médio
+- **Análise Detalhada**: Métricas consolidadas por país (média, mediana, desvio padrão)
+- **Mapa de Calor**: Visualização da distribuição de potencial por país
+- **Filtros Inteligentes**: Análise apenas para países com dados suficientes
+
+### 📊 Análise Financeira
+- **Box Plots**: Distribuição de capitalização e receita por potencial
+- **Violin Plots**: Análise de P/E Ratio e Dividend Yield por categoria
+- **Estatísticas Detalhadas**: Métricas financeiras consolidadas por potencial
+- **Comparações**: Análise entre diferentes níveis de potencial
+
+### 🔍 Análise de Correlações
+- **Matriz Completa**: Correlações entre todas as variáveis numéricas
+- **Correlações Específicas**: Foco nas correlações com potencial de crescimento
+- **Análise por Potencial**: Matrizes de correlação separadas por nível de potencial
+- **Visualizações Interativas**: Heatmaps coloridos e gráficos de barras
+
+### 📈 Análise de Tendências
+- **Scatter Plots**: Relações entre variáveis financeiras
+- **Análise de Clusters**: Identificação de grupos de empresas usando K-means
+- **Características dos Clusters**: Estatísticas detalhadas por cluster
+- **Filtros de Dados**: Tratamento inteligente de valores negativos
+
+### 🎯 Insights Avançados
+- **Análise de Outliers**: Identificação de empresas com características atípicas
+- **Recomendações**: Empresas com potencial de upgrade baseado em similaridade
+- **Resumo Executivo**: Métricas consolidadas e insights principais
+- **Análise de Performance**: Classificação por características (Small/Mid/Large Cap)
+
+## 📊 Formato dos Dados
+
+O dataset principal (`data.csv`) deve conter as seguintes colunas:
+- `name`: Nome da empresa
+- `country`: País de origem
+- `dividend_yield_ttm`: Rendimento de dividendos
+- `earnings_ttm`: Lucros (TTM)
+- `marketcap`: Capitalização de mercado
+- `pe_ratio_ttm`: Índice P/L (TTM)
+- `revenue_ttm`: Receita (TTM)
+- `price`: Preço da ação
+- `gdp_per_capita_usd`: PIB per capita (USD)
+- `gdp_growth_percent`: Crescimento do PIB (%)
+- `inflation_percent`: Taxa de inflação (%)
+- `interest_rate_percent`: Taxa de juros (%)
+- `unemployment_rate_percent`: Taxa de desemprego (%)
+- `exchange_rate_to_usd`: Taxa de câmbio para USD
+- `inflation`: Valor absoluto da inflação (geralmente negativo)
+- `interest_rate`: Valor absoluto da taxa de juros (geralmente negativo)
+- `unemployment`: Valor absoluto da taxa de desemprego (geralmente negativo)
+- `pc_class`: Classe de potencial (0=Baixo, 1=Médio, 2=Alto)
+
+### 📊 Features do Modelo (15 features)
+O modelo Random Forest foi treinado com 15 features:
+1. `dividend_yield_ttm`
+2. `earnings_ttm`
+3. `marketcap`
+4. `pe_ratio_ttm`
+5. `revenue_ttm`
+6. `price`
+7. `gdp_per_capita_usd`
+8. `gdp_growth_percent`
+9. `inflation_percent`
+10. `interest_rate_percent`
+11. `unemployment_rate_percent`
+12. `exchange_rate_to_usd`
+13. `inflation`
+14. `interest_rate`
+15. `unemployment`
+
+## 📊 Modelo de Machine Learning
+
+- **Algoritmo**: Random Forest Classifier
+- **Classes de Previsão**:
+  - 0: Baixo Potencial de Crescimento
+  - 1: Médio Potencial de Crescimento  
+  - 2: Alto Potencial de Crescimento
+- **Features**: 15+ indicadores financeiros e macroeconômicos
+- **Preprocessamento**: Normalização e balanceamento de classes
+- **Validação**: Cross-validation para robustez
+
+## 🎨 Design e Interface
+
+- **Tema**: Escuro elegante com cores quentes (laranja, amarelo, vermelho)
+- **Configuração**: Tema escuro configurado no `.streamlit/config.toml`
+- **Tipografia**: Inter (Google Fonts) para melhor legibilidade
+- **Componentes**: Cards premium com animações suaves
+- **Visualizações**: Plotly para gráficos interativos
+- **Responsivo**: Interface adaptável para diferentes tamanhos de tela
+
+### 🎨 Cores do Tema
+- **Primária**: #FF6B35 (Laranja quente)
+- **Fundo**: #0E1117 (Escuro)
+- **Fundo Secundário**: #1E1E1E (Cinza escuro)
+- **Texto**: #FAFAFA (Branco claro)
+
+## 📝 Notas Importantes
+
+- Certifique-se de que os arquivos `data.csv` e `Random_Forest_model.joblib` estão presentes
+- O modelo foi treinado com dados pré-processados e normalizados
+- A aplicação verifica automaticamente a disponibilidade dos componentes
+- Todas as visualizações são otimizadas para o tema escuro
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Por favor, sinta-se à vontade para submeter pull requests.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 👥 Autor
+
+- Sidnei Almeida - Desenvolvimento 
