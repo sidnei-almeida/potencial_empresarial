@@ -28,6 +28,8 @@ def download_file_from_github(url: str, filename: str) -> str:
     """
     Downloads a file from GitHub and returns the local path
     """
+    import time
+    
     try:
         # Create temporary directory if it doesn't exist
         temp_dir = Path(tempfile.gettempdir()) / "potencial_empresarial"
@@ -38,7 +40,7 @@ def download_file_from_github(url: str, filename: str) -> str:
         # Check if file already exists and is recent (1 hour cache)
         if file_path.exists():
             file_age = os.path.getmtime(file_path)
-            current_time = os.path.getmtime(file_path)
+            current_time = time.time()  # Fixed: should use time.time(), not file_path
             if (current_time - file_age) < 3600:  # 1 hour in seconds
                 return str(file_path)
         
@@ -275,25 +277,21 @@ def load_data():
         try:
             if os.path.exists('dados/data.csv'):
                 df = pd.read_csv('dados/data.csv')
-                st.info("📁 Data loaded locally")
             else:
                 # Download from GitHub
-                st.info("🌐 Downloading data from GitHub...")
                 data_path = download_file_from_github(DATA_URL, "data.csv")
                 if data_path:
                     df = pd.read_csv(data_path)
-                    st.success("✅ Data successfully downloaded from GitHub")
                 else:
-                    st.error("❌ Error downloading data from GitHub")
                     return None, None
         except Exception as e:
-            st.error(f"Error loading data: {e}")
+            print(f"Error loading data: {e}")
             return None, None
         
         return df, None  # Always returns None for df_potencial as it's no longer used
         
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        print(f"Error loading data: {e}")
         return None, None
 
 @st.cache_resource
@@ -305,22 +303,18 @@ def load_model():
         # Try to load locally first
         if os.path.exists('modelos/Random_Forest_model.joblib'):
             model = joblib.load('modelos/Random_Forest_model.joblib')
-            st.info("📁 Model loaded locally")
         else:
             # Download from GitHub
-            st.info("🌐 Downloading model from GitHub...")
             model_path = download_file_from_github(MODEL_URL, "Random_Forest_model.joblib")
             if model_path:
                 model = joblib.load(model_path)
-                st.success("✅ Model successfully downloaded from GitHub")
             else:
-                st.error("❌ Error downloading model from GitHub")
                 return None
         
         return model
         
     except Exception as e:
-        st.error(f"Error loading model: {e}")
+        print(f"Error loading model: {e}")
         return None
 
 def show_system_status(model, df):
