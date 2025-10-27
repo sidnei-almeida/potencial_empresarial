@@ -7,9 +7,11 @@ textColor = "#FAFAFA"            # Text color (light white)
 
 [server]
 # Server settings
-port = 8501
+# Note: Port is managed by Streamlit Cloud automatically
 address = "0.0.0.0"
 headless = true
+enableXsrfProtection = true
+enableCORS = false
 
 [browser]
 # Browser settings

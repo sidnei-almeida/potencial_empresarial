@@ -34,4 +34,5 @@ echo "✅ All necessary files found!"
 
 # Run the app
 echo "🌟 Running the Streamlit app..."
-streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+# Don't specify port - let Streamlit Cloud manage it
+streamlit run app.py
