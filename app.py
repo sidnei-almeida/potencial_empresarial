@@ -23,49 +23,84 @@ GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_
 DATA_URL = f"{GITHUB_BASE_URL}/dados/data.csv"
 MODEL_URL = f"{GITHUB_BASE_URL}/modelos/Random_Forest_model.joblib"
 
-@st.cache_data
+# GitHub rate limiting constants
+GITHUB_RATE_LIMIT_RESET = 3600  # 1 hour in seconds
+
+@st.cache_data(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
 def download_file_from_github(url: str, filename: str) -> str:
     """
     Downloads a file from GitHub and returns the local path
     """
     import time
-    
+
     try:
         # Create temporary directory if it doesn't exist
         temp_dir = Path(tempfile.gettempdir()) / "potencial_empresarial"
         temp_dir.mkdir(exist_ok=True)
-        
+
         file_path = temp_dir / filename
-        
-        # Check if file already exists and is recent (1 hour cache)
+
+        # Check if file already exists and is recent (2 hours cache)
         if file_path.exists():
             file_age = os.path.getmtime(file_path)
-            current_time = time.time()  # Fixed: should use time.time(), not file_path
-            if (current_time - file_age) < 3600:  # 1 hour in seconds
+            current_time = time.time()
+            if (current_time - file_age) < 7200:  # 2 hours in seconds
                 print(f"Using cached file: {filename}")
                 return str(file_path)
 
-        # Download file from GitHub
+        # Download file from GitHub with proper headers to avoid rate limiting
         print(f"Downloading {filename} from GitHub...")
-        response = requests.get(url, timeout=60)  # Increased timeout to 60 seconds
-        response.raise_for_status()
+        headers = {
+            'User-Agent': 'Business-Growth-Potential-App/1.0',
+            'Accept': 'application/vnd.github.v3.raw'
+        }
+        response = requests.get(url, timeout=60, headers=headers)
+
+        # Handle rate limiting (429) and other HTTP errors
+        if response.status_code == 429:
+            print(f"GitHub rate limit exceeded for {filename}. Using fallback or cached version.")
+            # Try to use existing file even if it's older
+            if file_path.exists():
+                print(f"Using older cached file: {filename}")
+                return str(file_path)
+            else:
+                print(f"No cached file available for {filename}")
+                return None
+        elif response.status_code == 403:
+            print(f"Access forbidden for {filename}. This might be a permissions issue.")
+            # Try to use existing file
+            if file_path.exists():
+                print(f"Using cached file due to 403 error: {filename}")
+                return str(file_path)
+            else:
+                return None
+        else:
+            response.raise_for_status()
+
         print(f"Successfully downloaded {filename}")
-        
+
         # Save file
         with open(file_path, 'wb') as f:
             f.write(response.content)
-        
+
         return str(file_path)
-        
+
     except Exception as e:
         print(f"Error downloading {filename} from GitHub: {str(e)}")
+        # Return cached file if available, even if older
+        if file_path.exists():
+            print(f"Using cached file due to error: {filename}")
+            return str(file_path)
         return None
 
-@st.cache_data
+@st.cache_data(ttl=1800)  # Cache for 30 minutes to avoid excessive requests
 def check_github_connection():
     """Checks if the connection with GitHub is working"""
     try:
-        response = requests.get(f"https://github.com/{GITHUB_USERNAME}/{GITHUB_REPO}", timeout=10)
+        headers = {
+            'User-Agent': 'Business-Growth-Potential-App/1.0'
+        }
+        response = requests.get(f"https://github.com/{GITHUB_USERNAME}/{GITHUB_REPO}", timeout=10, headers=headers)
         return response.status_code == 200
     except:
         return False
@@ -275,7 +310,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
 def load_data():
     """Loads company data from GitHub or locally"""
     try:
@@ -302,7 +337,7 @@ def load_data():
         print(f"Error loading data: {e}")
         return None, None
 
-@st.cache_resource(ttl=3600)  # Cache for 1 hour
+@st.cache_resource(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
 def load_model():
     """Loads the trained model from GitHub or locally"""
     try:
@@ -357,13 +392,31 @@ def show_system_status(model, df):
     """, unsafe_allow_html=True)
     
     # GitHub Connection Status
-    github_status = "✅ Connected" if check_github_connection() else "⚠️ No connection"
-    github_color = "#FF6B35" if check_github_connection() else "#FFD23F"
-    
+    github_connected = check_github_connection()
+    github_status = "✅ Connected" if github_connected else "⚠️ No connection"
+    github_color = "#FF6B35" if github_connected else "#FFD23F"
+
+    # Check for rate limiting by trying to access a small file
+    rate_limit_info = ""
+    if github_connected:
+        try:
+            headers = {'User-Agent': 'Business-Growth-Potential-App/1.0'}
+            response = requests.head(DATA_URL, timeout=5, headers=headers)
+            if response.status_code == 403:
+                github_status = "⚠️ Rate Limited"
+                github_color = "#FFD23F"
+                rate_limit_info = " (Rate limited by GitHub)"
+            elif response.status_code == 429:
+                github_status = "⏳ Rate Limited"
+                github_color = "#FF6B6B"
+                rate_limit_info = " (Please wait before retrying)"
+        except:
+            pass
+
     st.markdown(f"""
     <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {github_color};">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">🌐 GitHub Connection</span>
+            <span style="color: #FAFAFA; font-weight: 600;">🌐 GitHub Connection{rate_limit_info}</span>
             <span style="color: {github_color}; font-weight: 700;">{github_status}</span>
         </div>
     </div>
@@ -647,13 +700,21 @@ def show_data_analysis(df):
     st.markdown("### 🌍 Distribution by Country")
     
     country_counts = df['country'].value_counts().head(10)
-    
+
+    # Create DataFrame for proper color mapping
+    country_df = pd.DataFrame({
+        'country': country_counts.index,
+        'count': country_counts.values,
+        'color': country_counts.values
+    })
+
     fig = px.bar(
-        x=country_counts.values,
-        y=country_counts.index,
+        country_df,
+        x='count',
+        y='country',
         orientation='h',
         title="Top 10 Countries by Number of Companies",
-        color=country_counts.values,
+        color='color',
         color_continuous_scale='Oranges'
     )
     
@@ -1304,13 +1365,21 @@ def show_geographic_insights(df):
     with col1:
         # # Distribution by country
         country_counts = df['country'].value_counts().head(10)
-        
+
+        # Create DataFrame for proper color mapping
+        country_df = pd.DataFrame({
+            'country': country_counts.index,
+            'count': country_counts.values,
+            'color': country_counts.values
+        })
+
         fig = px.bar(
-            x=country_counts.values,
-            y=country_counts.index,
+            country_df,
+            x='count',
+            y='country',
             orientation='h',
             title="Top 10 Countries by Number of Companies",
-            color=country_counts.values,
+            color='color',
             color_continuous_scale='Oranges'
         )
         
@@ -1326,13 +1395,21 @@ def show_geographic_insights(df):
     with col2:
         # Potential médio por país
         country_potential = df.groupby('country')['pc_class'].mean().sort_values(ascending=False).head(10)
-        
+
+        # Create DataFrame for proper color mapping
+        potential_df = pd.DataFrame({
+            'country': country_potential.index,
+            'potential': country_potential.values,
+            'color': country_potential.values
+        })
+
         fig = px.bar(
-            x=country_potential.values,
-            y=country_potential.index,
+            potential_df,
+            x='potential',
+            y='country',
             orientation='h',
-            title="Top 10 Countries por Potential Medium",
-            color=country_potential.values,
+            title="Top 10 Countries by Average Potential",
+            color='color',
             color_continuous_scale='Viridis'
         )
         
@@ -1507,9 +1584,8 @@ def show_correlation_insights(df):
     
     fig = px.imshow(
         correlation_matrix,
-        title="Matriz de Correlação Completa",
-        color_continuous_scale='RdBu_r',
-        aspect="auto"
+        title="Complete Correlation Matrix",
+        color_continuous_scale='RdBu_r'
     )
     
     fig.update_layout(
@@ -1526,13 +1602,21 @@ def show_correlation_insights(df):
     # Calcular correlações com pc_class
     correlations_with_potential = df[numeric_cols].corrwith(df['pc_class']).sort_values(ascending=False)
     correlations_with_potential = correlations_with_potential.drop('pc_class')  # Remover auto-correlação
-    
+
+    # Create DataFrame for proper color mapping
+    corr_df = pd.DataFrame({
+        'feature': correlations_with_potential.index,
+        'correlation': correlations_with_potential.values,
+        'color': correlations_with_potential.values
+    })
+
     fig = px.bar(
-        x=correlations_with_potential.values,
-        y=correlations_with_potential.index,
+        corr_df,
+        x='correlation',
+        y='feature',
         orientation='h',
-        title="Correlação com Potential de Crescimento",
-        color=correlations_with_potential.values,
+        title="Correlation with Growth Potential",
+        color='color',
         color_continuous_scale='RdBu_r'
     )
     
@@ -1561,21 +1645,19 @@ def show_correlation_insights(df):
             
             fig = px.imshow(
                 corr_matrix_level,
-                title=f"Correlações - {level} Potential",
-                color_continuous_scale='RdBu_r',
-                aspect="auto"
+                title=f"Correlations - {level} Potential",
+                color_continuous_scale='RdBu_r'
             )
             
             fig.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
-                font_color='#FAFAFA',
-                height=400
+                font_color='#FAFAFA'
             )
             
             st.plotly_chart(fig, width='stretch')
         else:
-            st.info(f"Dados insuficientes para análise de {level} Potential")
+            st.info(f"Insufficient data for {level} Potential analysis")
 
 def show_trend_insights(df):
     """Trend insights"""
@@ -1586,31 +1668,15 @@ def show_trend_insights(df):
     
     with col1:
         # Market Cap vs Revenue
-        # Filtrar dados com P/E positivo para usar como size
-        df_positive_pe = df[df['pe_ratio_ttm'] > 0]
-        
-        if len(df_positive_pe) > 0:
-            fig = px.scatter(
-                df_positive_pe, 
-                x='revenue_ttm', 
-                y='marketcap',
-                color='pc_class',
-                size='pe_ratio_ttm',
-                title="Capitalization vs Receita (P/E > 0)",
-                labels={'revenue_ttm': 'Receita TTM (USD)', 'marketcap': 'Capitalization (USD)', 'pc_class': 'Potential'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
-        else:
-            # Se não houver P/E positivo, usar scatter sem size
-            fig = px.scatter(
-                df, 
-                x='revenue_ttm', 
-                y='marketcap',
-                color='pc_class',
-                title="Capitalization vs Receita",
-                labels={'revenue_ttm': 'Receita TTM (USD)', 'marketcap': 'Capitalization (USD)', 'pc_class': 'Potential'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
+        fig = px.scatter(
+            df,
+            x='revenue_ttm',
+            y='marketcap',
+            color='pc_class',
+            title="Capitalization vs Revenue",
+            labels={'revenue_ttm': 'Revenue TTM (USD)', 'marketcap': 'Capitalization (USD)', 'pc_class': 'Potential'},
+            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
+        )
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
@@ -1622,31 +1688,15 @@ def show_trend_insights(df):
     
     with col2:
         # P/E vs Dividend Yield
-        # Filtrar dados com P/E positivo
-        df_positive_pe_2 = df[(df['pe_ratio_ttm'] > 0) & (df['dividend_yield_ttm'] >= 0)]
-        
-        if len(df_positive_pe_2) > 0:
-            fig = px.scatter(
-                df_positive_pe_2, 
-                x='dividend_yield_ttm', 
-                y='pe_ratio_ttm',
-                color='pc_class',
-                size='marketcap',
-                title="Dividend Yield vs P/E Ratio (Valores Positivos)",
-                labels={'dividend_yield_ttm': 'Dividend Yield (%)', 'pe_ratio_ttm': 'P/E Ratio', 'pc_class': 'Potential'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
-        else:
-            # Se não houver dados positivos, usar scatter sem size
-            fig = px.scatter(
-                df, 
-                x='dividend_yield_ttm', 
-                y='pe_ratio_ttm',
-                color='pc_class',
-                title="Dividend Yield vs P/E Ratio",
-                labels={'dividend_yield_ttm': 'Dividend Yield (%)', 'pe_ratio_ttm': 'P/E Ratio', 'pc_class': 'Potential'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
+        fig = px.scatter(
+            df,
+            x='dividend_yield_ttm',
+            y='pe_ratio_ttm',
+            color='pc_class',
+            title="Dividend Yield vs P/E Ratio",
+            labels={'dividend_yield_ttm': 'Dividend Yield (%)', 'pe_ratio_ttm': 'P/E Ratio', 'pc_class': 'Potential'},
+            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
+        )
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
@@ -1681,31 +1731,15 @@ def show_trend_insights(df):
         df_cluster['cluster'] = clusters
         
         # Visualizar clusters
-        # Filtrar P/E positivo para usar como size
-        df_cluster_positive = df_cluster[df_cluster['pe_ratio_ttm'] > 0]
-        
-        if len(df_cluster_positive) > 0:
-            fig = px.scatter(
-                df_cluster_positive, 
-                x='marketcap', 
-                y='revenue_ttm',
-                color='cluster',
-                size='pe_ratio_ttm',
-                title="Clusters de Empresas (Market Cap vs Revenue)",
-                labels={'marketcap': 'Capitalization (USD)', 'revenue_ttm': 'Receita TTM (USD)', 'cluster': 'Cluster'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
-        else:
-            # Se não houver P/E positivo, usar scatter sem size
-            fig = px.scatter(
-                df_cluster, 
-                x='marketcap', 
-                y='revenue_ttm',
-                color='cluster',
-                title="Clusters de Empresas (Market Cap vs Revenue)",
-                labels={'marketcap': 'Capitalization (USD)', 'revenue_ttm': 'Receita TTM (USD)', 'cluster': 'Cluster'},
-                color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-            )
+        fig = px.scatter(
+            df_cluster,
+            x='marketcap',
+            y='revenue_ttm',
+            color='cluster',
+            title="Company Clusters (Market Cap vs Revenue)",
+            labels={'marketcap': 'Capitalization (USD)', 'revenue_ttm': 'Revenue TTM (USD)', 'cluster': 'Cluster'},
+            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
+        )
         
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',

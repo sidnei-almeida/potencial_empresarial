@@ -12,5 +12,20 @@ maxUploadSize = 200
 maxMessageSize = 200
 enableWebsocketCompression = true
 
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[client]
+caching = true
+showSidebarNavigation = true
+
+# Allow external resources (fonts, etc.)
+enableCORS = true
+
+[global]
+developmentMode = false
+showWarningOnDirectExecution = false
+
 [theme]
 base = "dark"

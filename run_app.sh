@@ -32,6 +32,14 @@ fi
 
 echo "✅ All necessary files found!"
 
+# Check if we can load data locally (to avoid GitHub rate limiting during testing)
+if [ -f "dados/data.csv" ] && [ -f "modelos/Random_Forest_model.joblib" ]; then
+    echo "📁 Using local files - no GitHub download needed!"
+else
+    echo "🌐 Will download files from GitHub (ensure internet connection)"
+    echo "💡 Tip: Place data.csv and Random_Forest_model.joblib in their respective folders to avoid GitHub rate limits"
+fi
+
 # Run the app
 echo "🌟 Running the Streamlit app..."
 # Don't specify port - let Streamlit Cloud manage it

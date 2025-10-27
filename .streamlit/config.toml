@@ -21,7 +21,14 @@ enableWebsocketCompression = true
 [browser]
 # Browser settings
 gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[client]
+# Client settings to improve resource loading
+caching = true
+showSidebarNavigation = true
 
 [global]
 # Global settings
 developmentMode = false
+showWarningOnDirectExecution = false
