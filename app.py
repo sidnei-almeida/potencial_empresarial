@@ -484,7 +484,7 @@ def show_home_page(df, df_potencial, model):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Distribuição por potencial de crescimento
+        # # Distribution by growth potential
         if 'pc_class' in df.columns:
             high_potential = len(df[df['pc_class'] == 2])
             total_companies = len(df)
@@ -548,7 +548,7 @@ def show_home_page(df, df_potencial, model):
         <p style="font-size: 0.75rem; line-height: 1.4; margin: 0;">
             This project implements a <strong>business growth potential analysis system</strong> using 
             <strong>Machine Learning</strong> with Random Forest. The goal is to classify companies at different levels of 
-            potencial de crescimento baseado em indicadores financeiros e econômicos.
+            growth potential based on financial and economic indicators.
         </p>
         <p style="font-size: 0.7rem; line-height: 1.4; margin: 0.5rem 0 0 0; color: #B0B0B0;">
             <strong>🌐 Fonte dos Dados:</strong> Data and model are automatically loaded from GitHub 
@@ -632,7 +632,7 @@ def show_data_analysis(df):
         yaxis=dict(autorange="reversed")
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Distribuição de potencial se disponível
     if 'pc_class' in df.columns:
@@ -655,7 +655,7 @@ def show_data_analysis(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 def show_model_info(model):
     """Information sobre o modelo"""
@@ -693,7 +693,7 @@ def show_model_info(model):
                             'Importance': model.feature_importances_
                         }).sort_values('Importance', ascending=False)
                         
-                        st.dataframe(importance_df.head(10), use_container_width=True)
+                        st.dataframe(importance_df.head(10), width='stretch')
     else:
         st.error("Model not loaded. Please verify that the model file exists.")
 
@@ -802,7 +802,7 @@ def show_company_prediction(df, model):
                             font_color='#FAFAFA'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
     else:
         st.warning(f"No companies found for country {selected_country}")
 
@@ -1018,9 +1018,9 @@ def show_manual_prediction(model):
                         font_color='#FAFAFA'
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 
-                # Mostrar interpretação dos resultados
+                # Show prediction interpretation
                 show_prediction_interpretation(predicted_label, probabilities[prediction])
 
 def show_batch_prediction(df, model):
@@ -1093,7 +1093,7 @@ def show_batch_prediction(df, model):
                 
                 # Mostrar preview dos dados
                 st.markdown("#### 👀 Data Preview")
-                st.dataframe(batch_df.head(), use_container_width=True)
+                st.dataframe(batch_df.head(), width='stretch')
                 
                 # Botão para processar
                 if st.button("🚀 Processar Predictions", type="primary"):
@@ -1156,11 +1156,11 @@ def show_batch_prediction(df, model):
                             font_color='#FAFAFA'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                         
                         # Tabela de resultados
                         st.markdown("#### 📋 Results Table")
-                        st.dataframe(results_df, use_container_width=True)
+                        st.dataframe(results_df, width='stretch')
                         
                         # Botão para download dos resultados
                         csv_results = results_df.to_csv(index=False)
@@ -1175,35 +1175,35 @@ def show_batch_prediction(df, model):
             st.error(f"Error processing file: {str(e)}")
 
 def show_prediction_interpretation(potential, confidence):
-    """Mostra interpretação dos resultados da predição"""
-    st.markdown("#### 💡 Interpretação dos Resultados")
+    """Shows prediction result interpretation"""
+    st.markdown("#### 💡 Result Interpretation")
     
     if potential == 'High':
         st.markdown("""
         <div class="success-box">
             <h4 style="color: #FFD23F; margin-bottom: 0.5rem;">🚀 High Potential de Crescimento</h4>
-            <p>Esta empresa apresenta indicadores que sugerem um <strong>alto potencial de crescimento</strong>. 
-            Os fatores analisados indicam oportunidades favoráveis para investimento e expansão.</p>
+            <p>This company presents indicators that suggest <strong>high growth potential</strong>. 
+            The factors analyzed indicate favorable opportunities for investment and expansion.</p>
         </div>
         """, unsafe_allow_html=True)
     elif potential == 'Medium':
         st.markdown("""
         <div class="info-box">
             <h4 style="color: #F7931E; margin-bottom: 0.5rem;">⚖️ Medium Potential de Crescimento</h4>
-            <p>Esta empresa apresenta um <strong>potencial de crescimento moderado</strong>. 
-            Existem oportunidades, mas também alguns desafios que devem ser considerados na tomada de decisão.</p>
+            <p>This company presents a <strong>moderate growth potential</strong>. 
+            There are opportunities, but also some challenges that should be considered in decision-making.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="warning-box">
             <h4 style="color: #FF6B6B; margin-bottom: 0.5rem;">⚠️ Low Potential de Crescimento</h4>
-            <p>Esta empresa apresenta indicadores que sugerem um <strong>baixo potencial de crescimento</strong>. 
-            Recomenda-se uma análise mais detalhada antes de investimentos significativos.</p>
+            <p>This company presents indicators that suggest <strong>low growth potential</strong>. 
+            A more detailed analysis is recommended before significant investments.</p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Indicador de confiança
+    # Confidence indicator
     if confidence > 0.8:
         confidence_level = "Alta"
         confidence_color = "#FFD23F"
@@ -1217,7 +1217,7 @@ def show_prediction_interpretation(potential, confidence):
     st.markdown(f"""
     <div style="background: rgba(255, 255, 255, 0.1); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
         <h4 style="color: {confidence_color}; margin-bottom: 0.5rem;">🎯 Nível de Confidence: {confidence_level}</h4>
-        <p>O modelo apresenta <strong>{confidence:.1%}</strong> de confiança nesta predição.</p>
+        <p>The model presents <strong>{confidence:.1%}</strong> confidence in this prediction.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1248,10 +1248,10 @@ def show_insights(df, df_potencial):
         show_advanced_insights(df)
 
 def show_geographic_insights(df):
-    """Insights geográficos avançados"""
+    """Advanced geographic insights"""
     st.markdown("### 🌍 Detailed Geographic Analysis")
     
-    # Top países por potencial
+    # # Top countries by potential
     col1, col2 = st.columns(2)
     
     with col1:
@@ -1274,7 +1274,7 @@ def show_geographic_insights(df):
             yaxis=dict(autorange="reversed")
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with col2:
         # Potential médio por país
@@ -1296,7 +1296,7 @@ def show_geographic_insights(df):
             yaxis=dict(autorange="reversed")
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Análise detalhada por país
     st.markdown("#### 📋 Detailed Analysis by Country")
@@ -1318,7 +1318,7 @@ def show_geographic_insights(df):
     # Filtrar países com pelo menos 5 empresas
     country_analysis_filtered = country_analysis[country_analysis['Total_Empresas'] >= 5]
     
-    st.dataframe(country_analysis_filtered.head(15), use_container_width=True)
+    st.dataframe(country_analysis_filtered.head(15), width='stretch')
     
     # Mapa de calor por país e potencial
     st.markdown("#### 🗺️ Mapa de Calor: Country vs Potential")
@@ -1342,10 +1342,10 @@ def show_geographic_insights(df):
         font_color='#FAFAFA'
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def show_financial_insights(df):
-    """Insights financeiros avançados"""
+    """Advanced financial insights"""
     st.markdown("### 💰 Detailed Financial Analysis")
     
     # Métricas financeiras por potencial
@@ -1367,7 +1367,7 @@ def show_financial_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with col2:
         # Box plot de receita por potencial
@@ -1385,7 +1385,7 @@ def show_financial_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Análise de múltiplos por potencial
     st.markdown("#### 📊 Financial Multiples Analysis")
@@ -1408,7 +1408,7 @@ def show_financial_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with col2:
         # Dividend Yield por potencial
@@ -1426,7 +1426,7 @@ def show_financial_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Estatísticas financeiras por potencial
     st.markdown("#### 📈 Estatísticas Financeiras por Potential")
@@ -1448,10 +1448,10 @@ def show_financial_insights(df):
     # Renomear índices
     financial_stats.index = ['Low Potential', 'Medium Potential', 'High Potential']
     
-    st.dataframe(financial_stats, use_container_width=True)
+    st.dataframe(financial_stats, width='stretch')
 
 def show_correlation_insights(df):
-    """Insights de correlação avançados"""
+    """Advanced correlation insights"""
     st.markdown("### 🔍 Advanced Correlation Analysis")
     
     # Matriz de correlação principal
@@ -1471,7 +1471,7 @@ def show_correlation_insights(df):
         font_color='#FAFAFA'
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Correlações com potencial de crescimento
     st.markdown("#### 🎯 Correlações com Potential de Crescimento")
@@ -1496,7 +1496,7 @@ def show_correlation_insights(df):
         yaxis=dict(autorange="reversed")
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Análise de correlações por potencial
     st.markdown("#### 📊 Matriz de Correlação por Potential")
@@ -1526,12 +1526,12 @@ def show_correlation_insights(df):
                 height=400
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info(f"Dados insuficientes para análise de {level} Potential")
 
 def show_trend_insights(df):
-    """Insights de tendências"""
+    """Trend insights"""
     st.markdown("### 📈 Trend Analysis")
     
     # Scatter plots com tendências
@@ -1571,7 +1571,7 @@ def show_trend_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with col2:
         # P/E vs Dividend Yield
@@ -1607,7 +1607,7 @@ def show_trend_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Análise de clusters
     st.markdown("#### 🎯 Cluster Analysis")
@@ -1666,18 +1666,18 @@ def show_trend_insights(df):
             font_color='#FAFAFA'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Estatísticas dos clusters
         st.markdown("#### 📊 Características dos Clusters")
         cluster_stats = df_cluster.groupby('cluster')[clustering_features].mean().round(2)
         cluster_stats.index = ['Cluster 1', 'Cluster 2', 'Cluster 3']
-        st.dataframe(cluster_stats, use_container_width=True)
+        st.dataframe(cluster_stats, width='stretch')
     else:
         st.info("Dados insuficientes para análise de clusters")
 
 def show_advanced_insights(df):
-    """Insights avançados e recomendações"""
+    """Advanced insights and recommendations"""
     st.markdown("### 🎯 Insights Avançados e Recomendações")
     
     # Análise de outliers
@@ -1700,7 +1700,7 @@ def show_advanced_insights(df):
         if len(outliers_marketcap) > 0:
             st.markdown("**Top 5 Outliers:**")
             top_outliers = outliers_marketcap.nlargest(5, 'marketcap')[['name', 'country', 'marketcap', 'pc_class']]
-            st.dataframe(top_outliers, use_container_width=True)
+            st.dataframe(top_outliers, width='stretch')
     
     with col2:
         # Outliers em P/E Ratio
@@ -1716,7 +1716,7 @@ def show_advanced_insights(df):
         if len(outliers_pe) > 0:
             st.markdown("**Top 5 Outliers:**")
             top_outliers_pe = outliers_pe.nlargest(5, 'pe_ratio_ttm')[['name', 'country', 'pe_ratio_ttm', 'pc_class']]
-            st.dataframe(top_outliers_pe, use_container_width=True)
+            st.dataframe(top_outliers_pe, width='stretch')
     
     # Análise de performance por setor (simulado)
     st.markdown("#### 🏭 Performance Analysis by Characteristics")
@@ -1729,7 +1729,7 @@ def show_advanced_insights(df):
     sector_performance = df.groupby('sector')['pc_class'].agg(['count', 'mean', 'std']).round(2)
     sector_performance.columns = ['N_Empresas', 'Potential_Medio', 'Potential_Desvio']
     
-    st.dataframe(sector_performance, use_container_width=True)
+    st.dataframe(sector_performance, width='stretch')
     
     # Recomendações baseadas em dados
     st.markdown("#### 💡 Recomendações Baseadas em Dados")
@@ -1759,7 +1759,7 @@ def show_advanced_insights(df):
             top_similar = similar_companies.nlargest(10, 'marketcap')[
                 ['name', 'country', 'marketcap', 'revenue_ttm', 'pe_ratio_ttm', 'pc_class']
             ]
-            st.dataframe(top_similar, use_container_width=True)
+            st.dataframe(top_similar, width='stretch')
             
             st.markdown("""
             <div class="success-box">
