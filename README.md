@@ -1,217 +1,217 @@
-# Potencial de Crescimento Empresarial 🚀
+# Business Growth Potential 🚀
 
-Uma aplicação web interativa construída com Streamlit para análise inteligente do potencial de crescimento de empresas, baseada em indicadores financeiros e macroeconômicos usando Machine Learning.
+An interactive web application built with Streamlit for intelligent analysis of company growth potential, based on financial and macroeconomic indicators using Machine Learning.
 
-## 🌟 Funcionalidades
+## 🌟 Features
 
-### 1. Dashboard Interativo 📊
-- Interface elegante com tema escuro e cores quentes
-- Menu de navegação premium com ícones e animações
-- Métricas em tempo real com visualizações premium
-- Status do sistema em tempo real
-- Navegação intuitiva entre seções
+### 1. Interactive Dashboard 📊
+- Elegant interface with dark theme and warm colors
+- Premium navigation menu with icons and animations
+- Real-time metrics with premium visualizations
+- Real-time system status
+- Intuitive navigation between sections
 
-### 2. Análise de Dados 📈
-- Estatísticas gerais das empresas
-- Distribuição geográfica (Top 10 países)
-- Análise de potencial de crescimento por categoria
-- Visualizações interativas com Plotly
+### 2. Data Analysis 📈
+- General statistics of companies
+- Geographic distribution (Top 10 countries)
+- Growth potential analysis by category
+- Interactive visualizations with Plotly
 
-### 3. Informações do Modelo 🤖
-- Parâmetros detalhados do Random Forest
-- Importância das features (variáveis mais relevantes)
-- Métricas de performance do modelo
+### 3. Model Information 🤖
+- Detailed Random Forest parameters
+- Feature importance (most relevant variables)
+- Model performance metrics
 
-### 4. Predições Inteligentes 🔮
-- **Predição Individual**: Seleção por país e empresa do dataset
-- **Predição por Campos (SPA)**: Formulário interativo para entrada manual de dados
-- **Predição em Lote**: Upload de CSV para análise em massa
-- **Template de Dados**: Download de template para predições em lote
-- **Interpretação de Resultados**: Análise detalhada com níveis de confiança
-- **Visualizações**: Gráficos de probabilidades e distribuição
+### 4. Intelligent Predictions 🔮
+- **Individual Prediction**: Selection by country and company from dataset
+- **Form-Based Prediction (SPA)**: Interactive form for manual data entry
+- **Batch Prediction**: CSV upload for bulk analysis
+- **Data Template**: Download template for batch predictions
+- **Result Interpretation**: Detailed analysis with confidence levels
+- **Visualizations**: Probability charts and distribution
 
-### 5. Insights Avançados 💡
-- **🌍 Análise Geográfica**: Distribuição por países, mapas de calor, análise regional detalhada
-- **📊 Análise Financeira**: Box plots, violin plots, estatísticas por potencial de crescimento
-- **🔍 Correlações**: Matriz de correlação completa, correlações específicas com potencial
-- **📈 Tendências**: Scatter plots interativos, análise de clusters com K-means
-- **🎯 Insights Avançados**: Análise de outliers, recomendações baseadas em dados, resumo executivo
+### 5. Advanced Insights 💡
+- **🌍 Geographic Analysis**: Distribution by countries, heat maps, detailed regional analysis
+- **📊 Financial Analysis**: Box plots, violin plots, statistics by growth potential
+- **🔍 Correlations**: Complete correlation matrix, specific correlations with potential
+- **📈 Trends**: Interactive scatter plots, cluster analysis with K-means
+- **🎯 Advanced Insights**: Outlier analysis, data-driven recommendations, executive summary
 
-## 🛠️ Tecnologias Utilizadas
+## 🛠️ Technologies Used
 
 - **Python 3.x**
-- **Streamlit**: Interface web interativa
-- **Streamlit Option Menu**: Menu de navegação elegante
-- **Plotly**: Visualizações interativas
-- **Pandas**: Manipulação de dados
-- **Scikit-learn**: Modelo de Machine Learning (Random Forest)
-- **Joblib**: Serialização do modelo
+- **Streamlit**: Interactive web interface
+- **Streamlit Option Menu**: Elegant navigation menu
+- **Plotly**: Interactive visualizations
+- **Pandas**: Data manipulation
+- **Scikit-learn**: Machine Learning model (Random Forest)
+- **Joblib**: Model serialization
 
-## 📦 Instalação
+## 📦 Installation
 
-### Método 1: Clone Completo (Recomendado)
-1. Clone o repositório:
+### Method 1: Full Clone (Recommended)
+1. Clone the repository:
 ```bash
 git clone https://github.com/sidnei-almeida/potencial_empresarial.git
 cd potencial_empresarial
 ```
 
-2. Crie um ambiente virtual (opcional, mas recomendado):
+2. Create a virtual environment (optional, but recommended):
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# ou
+# or
 venv\Scripts\activate  # Windows
 ```
 
-3. Instale as dependências:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Método 2: Apenas o App (Download Automático)
-1. Baixe apenas o arquivo `app.py` e `requirements.txt`:
+### Method 2: App Only (Automatic Download)
+1. Download only the `app.py` and `requirements.txt` files:
 ```bash
 wget https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/app.py
 wget https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/requirements.txt
 ```
 
-2. Instale as dependências:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Execute o app:
+3. Run the app:
 ```bash
 streamlit run app.py
 ```
 
-> **💡 Nota:** Com o Método 2, os dados e modelo são baixados automaticamente do GitHub quando necessário!
+> **💡 Note:** With Method 2, data and model are automatically downloaded from GitHub when needed!
 
-## 🚀 Como Usar
+## 🚀 How to Use
 
-### Método 1: Script Automatizado (Recomendado)
+### Method 1: Automated Script (Recommended)
 ```bash
 ./run_app.sh
 ```
 
-### Método 2: Execução Manual
-1. Ative o ambiente virtual:
+### Method 2: Manual Execution
+1. Activate the virtual environment:
 ```bash
 source venv/bin/activate  # Linux/Mac
-# ou
+# or
 venv\Scripts\activate     # Windows
 ```
 
-2. Execute a aplicação:
+2. Run the application:
 ```bash
 streamlit run app.py
 ```
 
-3. Acesse a aplicação no navegador (geralmente em http://localhost:8501)
+3. Access the application in your browser (usually at http://localhost:8501)
 
-### Método 3: Execução Direta
+### Method 3: Direct Execution
 ```bash
 streamlit run app.py --server.port 8501 --server.address 0.0.0.0
 ```
 
-## 📁 Estrutura de Arquivos
+## 📁 File Structure
 
 ```
 tcc_streamlit/
-├── app.py                          # Aplicação principal Streamlit
-├── run_app.sh                      # Script de execução automatizado
-├── requirements.txt                # Dependências Python
-├── README.md                       # Documentação
+├── app.py                          # Main Streamlit application
+├── run_app.sh                      # Automated execution script
+├── requirements.txt                # Python dependencies
+├── README.md                       # Documentation
 ├── .streamlit/
-│   └── config.toml                 # Configuração do tema escuro
+│   └── config.toml                 # Dark theme configuration
 ├── dados/
-│   └── data.csv                   # Dataset principal das empresas
+│   └── data.csv                   # Main company dataset
 ├── modelos/
-│   ├── Random_Forest_model.joblib # Modelo treinado (Random Forest)
-│   └── Random_Forest_model.pkl    # Modelo em formato alternativo
+│   ├── Random_Forest_model.joblib # Trained model (Random Forest)
+│   └── Random_Forest_model.pkl    # Alternative model format
 └── pipeline/
-    └── classification_pipeline.py # Pipeline de classificação
+    └── classification_pipeline.py # Classification pipeline
 ```
 
-## 🔮 Funcionalidades de Predição
+## 🔮 Prediction Features
 
-### 🏢 Predição Individual
-- Seleção de empresa existente no dataset
-- Análise baseada em dados reais
-- Visualização de informações da empresa
-- Resultados com gráficos de probabilidades
+### 🏢 Individual Prediction
+- Selection of existing company in dataset
+- Analysis based on real data
+- Company information visualization
+- Results with probability charts
 
-### 📊 Predição por Campos (SPA)
-- **Single Page Application** com formulário interativo
-- Campos para todos os indicadores financeiros e macroeconômicos
-- Validação de entrada em tempo real
-- Análise personalizada com interpretação detalhada
-- Níveis de confiança da predição
+### 📊 Form-Based Prediction (SPA)
+- **Single Page Application** with interactive form
+- Fields for all financial and macroeconomic indicators
+- Real-time input validation
+- Personalized analysis with detailed interpretation
+- Prediction confidence levels
 
-### 📋 Predição em Lote
-- Upload de arquivo CSV com múltiplas empresas
-- Template de dados disponível para download
-- Validação automática de colunas obrigatórias
-- Processamento em massa com estatísticas consolidadas
-- Download dos resultados completos
+### 📋 Batch Prediction
+- CSV file upload with multiple companies
+- Data template available for download
+- Automatic validation of required columns
+- Bulk processing with consolidated statistics
+- Complete results download
 
-## 🔍 Funcionalidades de Insights Avançados
+## 🔍 Advanced Insights Features
 
-### 🌍 Análise Geográfica
-- **Distribuição por Países**: Top 10 países por número de empresas e potencial médio
-- **Análise Detalhada**: Métricas consolidadas por país (média, mediana, desvio padrão)
-- **Mapa de Calor**: Visualização da distribuição de potencial por país
-- **Filtros Inteligentes**: Análise apenas para países com dados suficientes
+### 🌍 Geographic Analysis
+- **Distribution by Countries**: Top 10 countries by number of companies and average potential
+- **Detailed Analysis**: Consolidated metrics by country (mean, median, standard deviation)
+- **Heat Map**: Visualization of potential distribution by country
+- **Smart Filters**: Analysis only for countries with sufficient data
 
-### 📊 Análise Financeira
-- **Box Plots**: Distribuição de capitalização e receita por potencial
-- **Violin Plots**: Análise de P/E Ratio e Dividend Yield por categoria
-- **Estatísticas Detalhadas**: Métricas financeiras consolidadas por potencial
-- **Comparações**: Análise entre diferentes níveis de potencial
+### 📊 Financial Analysis
+- **Box Plots**: Distribution of capitalization and revenue by potential
+- **Violin Plots**: P/E Ratio and Dividend Yield analysis by category
+- **Detailed Statistics**: Consolidated financial metrics by potential
+- **Comparisons**: Analysis between different potential levels
 
-### 🔍 Análise de Correlações
-- **Matriz Completa**: Correlações entre todas as variáveis numéricas
-- **Correlações Específicas**: Foco nas correlações com potencial de crescimento
-- **Análise por Potencial**: Matrizes de correlação separadas por nível de potencial
-- **Visualizações Interativas**: Heatmaps coloridos e gráficos de barras
+### 🔍 Correlation Analysis
+- **Complete Matrix**: Correlations between all numeric variables
+- **Specific Correlations**: Focus on correlations with growth potential
+- **Potential Analysis**: Correlation matrices separated by potential level
+- **Interactive Visualizations**: Colorful heatmaps and bar charts
 
-### 📈 Análise de Tendências
-- **Scatter Plots**: Relações entre variáveis financeiras
-- **Análise de Clusters**: Identificação de grupos de empresas usando K-means
-- **Características dos Clusters**: Estatísticas detalhadas por cluster
-- **Filtros de Dados**: Tratamento inteligente de valores negativos
+### 📈 Trend Analysis
+- **Scatter Plots**: Relationships between financial variables
+- **Cluster Analysis**: Identification of company groups using K-means
+- **Cluster Characteristics**: Detailed statistics by cluster
+- **Data Filters**: Intelligent handling of negative values
 
-### 🎯 Insights Avançados
-- **Análise de Outliers**: Identificação de empresas com características atípicas
-- **Recomendações**: Empresas com potencial de upgrade baseado em similaridade
-- **Resumo Executivo**: Métricas consolidadas e insights principais
-- **Análise de Performance**: Classificação por características (Small/Mid/Large Cap)
+### 🎯 Advanced Insights
+- **Outlier Analysis**: Identification of companies with atypical characteristics
+- **Recommendations**: Companies with upgrade potential based on similarity
+- **Executive Summary**: Consolidated metrics and main insights
+- **Performance Analysis**: Classification by characteristics (Small/Mid/Large Cap)
 
-## 📊 Formato dos Dados
+## 📊 Data Format
 
-O dataset principal (`data.csv`) deve conter as seguintes colunas:
-- `name`: Nome da empresa
-- `country`: País de origem
-- `dividend_yield_ttm`: Rendimento de dividendos
-- `earnings_ttm`: Lucros (TTM)
-- `marketcap`: Capitalização de mercado
-- `pe_ratio_ttm`: Índice P/L (TTM)
-- `revenue_ttm`: Receita (TTM)
-- `price`: Preço da ação
-- `gdp_per_capita_usd`: PIB per capita (USD)
-- `gdp_growth_percent`: Crescimento do PIB (%)
-- `inflation_percent`: Taxa de inflação (%)
-- `interest_rate_percent`: Taxa de juros (%)
-- `unemployment_rate_percent`: Taxa de desemprego (%)
-- `exchange_rate_to_usd`: Taxa de câmbio para USD
-- `inflation`: Valor absoluto da inflação (geralmente negativo)
-- `interest_rate`: Valor absoluto da taxa de juros (geralmente negativo)
-- `unemployment`: Valor absoluto da taxa de desemprego (geralmente negativo)
-- `pc_class`: Classe de potencial (0=Baixo, 1=Médio, 2=Alto)
+The main dataset (`data.csv`) should contain the following columns:
+- `name`: Company name
+- `country`: Country of origin
+- `dividend_yield_ttm`: Dividend yield
+- `earnings_ttm`: Earnings (TTM)
+- `marketcap`: Market capitalization
+- `pe_ratio_ttm`: P/E Ratio (TTM)
+- `revenue_ttm`: Revenue (TTM)
+- `price`: Stock price
+- `gdp_per_capita_usd`: GDP per capita (USD)
+- `gdp_growth_percent`: GDP growth (%)
+- `inflation_percent`: Inflation rate (%)
+- `interest_rate_percent`: Interest rate (%)
+- `unemployment_rate_percent`: Unemployment rate (%)
+- `exchange_rate_to_usd`: Exchange rate to USD
+- `inflation`: Absolute inflation value (usually negative)
+- `interest_rate`: Absolute interest rate value (usually negative)
+- `unemployment`: Absolute unemployment rate value (usually negative)
+- `pc_class`: Potential class (0=Low, 1=Medium, 2=High)
 
-### 📊 Features do Modelo (15 features)
-O modelo Random Forest foi treinado com 15 features:
+### 📊 Model Features (15 features)
+The Random Forest model was trained with 15 features:
 1. `dividend_yield_ttm`
 2. `earnings_ttm`
 3. `marketcap`
@@ -228,68 +228,68 @@ O modelo Random Forest foi treinado com 15 features:
 14. `interest_rate`
 15. `unemployment`
 
-## 📊 Modelo de Machine Learning
+## 📊 Machine Learning Model
 
-- **Algoritmo**: Random Forest Classifier
-- **Classes de Previsão**:
-  - 0: Baixo Potencial de Crescimento
-  - 1: Médio Potencial de Crescimento  
-  - 2: Alto Potencial de Crescimento
-- **Features**: 15+ indicadores financeiros e macroeconômicos
-- **Preprocessamento**: Normalização e balanceamento de classes
-- **Validação**: Cross-validation para robustez
+- **Algorithm**: Random Forest Classifier
+- **Prediction Classes**:
+  - 0: Low Growth Potential
+  - 1: Medium Growth Potential  
+  - 2: High Growth Potential
+- **Features**: 15+ financial and macroeconomic indicators
+- **Preprocessing**: Normalization and class balancing
+- **Validation**: Cross-validation for robustness
 
-## 🎨 Design e Interface
+## 🎨 Design and Interface
 
-- **Tema**: Escuro elegante com cores quentes (laranja, amarelo, vermelho)
-- **Configuração**: Tema escuro configurado no `.streamlit/config.toml`
-- **Tipografia**: Inter (Google Fonts) para melhor legibilidade
-- **Componentes**: Cards premium com animações suaves
-- **Visualizações**: Plotly para gráficos interativos
-- **Responsivo**: Interface adaptável para diferentes tamanhos de tela
+- **Theme**: Elegant dark with warm colors (orange, yellow, red)
+- **Configuration**: Dark theme configured in `.streamlit/config.toml`
+- **Typography**: Inter (Google Fonts) for better readability
+- **Components**: Premium cards with smooth animations
+- **Visualizations**: Plotly for interactive charts
+- **Responsive**: Interface adaptable for different screen sizes
 
-### 🎨 Cores do Tema
-- **Primária**: #FF6B35 (Laranja quente)
-- **Fundo**: #0E1117 (Escuro)
-- **Fundo Secundário**: #1E1E1E (Cinza escuro)
-- **Texto**: #FAFAFA (Branco claro)
+### 🎨 Theme Colors
+- **Primary**: #FF6B35 (Hot orange)
+- **Background**: #0E1117 (Dark)
+- **Secondary Background**: #1E1E1E (Dark gray)
+- **Text**: #FAFAFA (Light white)
 
-## 🌐 Integração com GitHub
+## 🌐 GitHub Integration
 
-Este projeto está totalmente integrado com o GitHub para facilitar o uso e distribuição:
+This project is fully integrated with GitHub to facilitate use and distribution:
 
-### 📥 Download Automático
-- **Dados e Modelo**: São baixados automaticamente do GitHub quando não estão disponíveis localmente
-- **Cache Inteligente**: Arquivos são armazenados temporariamente por 1 hora para evitar downloads repetidos
-- **Fallback**: Se não houver conexão com o GitHub, o app tenta usar arquivos locais
-- **Status em Tempo Real**: Interface mostra a fonte dos dados (Local/GitHub) e status da conexão
+### 📥 Automatic Download
+- **Data and Model**: Are automatically downloaded from GitHub when not available locally
+- **Smart Cache**: Files are temporarily stored for 1 hour to avoid repeated downloads
+- **Fallback**: If there's no GitHub connection, the app attempts to use local files
+- **Real-time Status**: Interface shows data source (Local/GitHub) and connection status
 
-### 🔗 URLs do Repositório
-- **Repositório**: https://github.com/sidnei-almeida/potencial_empresarial
-- **Dados**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/dados/data.csv
-- **Modelo**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/modelos/Random_Forest_model.joblib
+### 🔗 Repository URLs
+- **Repository**: https://github.com/sidnei-almeida/potencial_empresarial
+- **Data**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/dados/data.csv
+- **Model**: https://raw.githubusercontent.com/sidnei-almeida/potencial_empresarial/main/modelos/Random_Forest_model.joblib
 
-### 🚀 Deploy Simples
-Agora você pode compartilhar apenas o arquivo `app.py` e o app funcionará automaticamente, baixando todos os recursos necessários do GitHub!
+### 🚀 Simple Deploy
+Now you can share only the `app.py` file and the app will work automatically, downloading all necessary resources from GitHub!
 
-## 📝 Notas Importantes
+## 📝 Important Notes
 
-- **Arquivos Locais**: Se os arquivos `data.csv` e `Random_Forest_model.joblib` estão presentes localmente, eles serão usados
-- **Download Automático**: Se não estiverem presentes, serão baixados automaticamente do GitHub
-- **Conexão**: Requer conexão com a internet para download inicial dos recursos
-- **Cache**: Arquivos baixados são armazenados temporariamente para melhor performance
-- O modelo foi treinado com dados pré-processados e normalizados
-- A aplicação verifica automaticamente a disponibilidade dos componentes
-- Todas as visualizações são otimizadas para o tema escuro
+- **Local Files**: If `data.csv` and `Random_Forest_model.joblib` files are present locally, they will be used
+- **Automatic Download**: If not present, they will be automatically downloaded from GitHub
+- **Connection**: Requires internet connection for initial resource download
+- **Cache**: Downloaded files are temporarily stored for better performance
+- The model was trained with preprocessed and normalized data
+- The application automatically checks component availability
+- All visualizations are optimized for dark theme
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Por favor, sinta-se à vontade para submeter pull requests.
+Contributions are welcome! Please feel free to submit pull requests.
 
-## 📄 Licença
+## 📄 License
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+This project is licensed under the MIT license - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Autor
+## 👥 Author
 
-- Sidnei Almeida - Desenvolvimento 
+- Sidnei Almeida - Development

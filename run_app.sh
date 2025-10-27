@@ -1,37 +1,37 @@
 #!/bin/bash
 
-# Script para executar o app Streamlit de Potencial de Crescimento Empresarial
+# Script to run the Business Growth Potential Streamlit app
 
-echo "🚀 Iniciando o app de Potencial de Crescimento Empresarial..."
+echo "🚀 Starting the Business Growth Potential app..."
 
-# Verificar se o ambiente virtual existe
+# Check if virtual environment exists
 if [ -d "venv" ]; then
-    echo "📦 Ativando ambiente virtual..."
+    echo "📦 Activating virtual environment..."
     source venv/bin/activate
 else
-    echo "⚠️  Ambiente virtual não encontrado. Criando um novo..."
+    echo "⚠️  Virtual environment not found. Creating a new one..."
     python -m venv venv
     source venv/bin/activate
     
-    echo "📥 Instalando dependências..."
+    echo "📥 Installing dependencies..."
     pip install -r requirements.txt
 fi
 
-# Verificar se os arquivos necessários existem
-echo "🔍 Verificando arquivos necessários..."
+# Check if necessary files exist
+echo "🔍 Checking necessary files..."
 
 if [ ! -f "dados/data.csv" ]; then
-    echo "❌ Arquivo dados/data.csv não encontrado!"
+    echo "❌ File dados/data.csv not found!"
     exit 1
 fi
 
 if [ ! -f "modelos/Random_Forest_model.joblib" ]; then
-    echo "❌ Modelo Random_Forest_model.joblib não encontrado!"
+    echo "❌ Model Random_Forest_model.joblib not found!"
     exit 1
 fi
 
-echo "✅ Todos os arquivos necessários encontrados!"
+echo "✅ All necessary files found!"
 
-# Executar o app
-echo "🌟 Executando o app Streamlit..."
+# Run the app
+echo "🌟 Running the Streamlit app..."
 streamlit run app.py --server.port 8501 --server.address 0.0.0.0
