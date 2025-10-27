@@ -42,11 +42,14 @@ def download_file_from_github(url: str, filename: str) -> str:
             file_age = os.path.getmtime(file_path)
             current_time = time.time()  # Fixed: should use time.time(), not file_path
             if (current_time - file_age) < 3600:  # 1 hour in seconds
+                print(f"Using cached file: {filename}")
                 return str(file_path)
-        
+
         # Download file from GitHub
-        response = requests.get(url, timeout=30)
+        print(f"Downloading {filename} from GitHub...")
+        response = requests.get(url, timeout=60)  # Increased timeout to 60 seconds
         response.raise_for_status()
+        print(f"Successfully downloaded {filename}")
         
         # Save file
         with open(file_path, 'wb') as f:
@@ -55,7 +58,7 @@ def download_file_from_github(url: str, filename: str) -> str:
         return str(file_path)
         
     except Exception as e:
-        st.error(f"Error downloading {filename} from GitHub: {str(e)}")
+        print(f"Error downloading {filename} from GitHub: {str(e)}")
         return None
 
 @st.cache_data
@@ -72,7 +75,12 @@ st.set_page_config(
     page_title="Business Growth Potential",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # CSS personalizado para tema escuro elegante com cores quentes
@@ -267,12 +275,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_data():
     """Loads company data from GitHub or locally"""
     try:
         df = None
-        
+
         # Try to load locally first
         try:
             if os.path.exists('dados/data.csv'):
@@ -287,14 +295,14 @@ def load_data():
         except Exception as e:
             print(f"Error loading data: {e}")
             return None, None
-        
+
         return df, None  # Always returns None for df_potencial as it's no longer used
-        
+
     except Exception as e:
         print(f"Error loading data: {e}")
         return None, None
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)  # Cache for 1 hour
 def load_model():
     """Loads the trained model from GitHub or locally"""
     try:
@@ -389,13 +397,32 @@ def main():
     # Main title with premium design
     st.markdown('<h1 class="main-header fade-in">🚀 Business Growth Potential</h1>', unsafe_allow_html=True)
     st.markdown('<p class="text-secondary" style="text-align: center; font-size: 1.2rem; margin-bottom: 3rem;">Intelligent Business Growth Potential Analysis using Machine Learning</p>', unsafe_allow_html=True)
-    
+
     # Load data and model
     df, df_potencial = load_data()
     model = load_model()
-    
+
+    # Show loading state while data is being loaded
     if df is None:
-        st.error("Could not load data. Please verify that the files are in the correct location.")
+        st.error("❌ Could not load data. Please check your internet connection and try again.")
+        st.info("💡 **Troubleshooting tips:**")
+        st.info("- Ensure you have an active internet connection")
+        st.info("- Check if GitHub is accessible")
+        st.info("- Wait a few moments and refresh the page")
+
+        st.markdown("---")
+        st.markdown("### 🔄 Manual Retry")
+        if st.button("🔄 Try Again", type="primary"):
+            st.rerun()
+
+        # Show alternative interface when data is not available
+        st.markdown("---")
+        st.markdown("### 📋 Alternative Options")
+        st.info("While waiting for data to load, you can:")
+        st.info("• Check the **Model** tab for information about the ML model")
+        st.info("• Use the **Form-Based Prediction** tab for manual predictions")
+        st.info("• View the **Advanced Insights** tab (if available)")
+
         return
     
     # # Premium navigation menu with streamlit-option-menu
@@ -472,8 +499,14 @@ def main():
 
 def show_home_page(df, df_potencial, model):
     """Página inicial com visão geral premium"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🎯 Visão Geral do Projeto</h2>', unsafe_allow_html=True)
-    
+    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🎯 Project Overview</h2>', unsafe_allow_html=True)
+
+    if df is None:
+        st.info("🏠 **Home page will be available once the dataset is loaded.**")
+        st.info("The dashboard shows company statistics and growth potential analysis.")
+        st.info("Please wait for the data to load from GitHub.")
+        return
+
     # Cards de métricas premium
     col1, col2, col3 = st.columns(3)
     
@@ -505,7 +538,7 @@ def show_home_page(df, df_potencial, model):
         st.markdown(f'''
         <div class="fade-in" style="background: linear-gradient(90deg, #F7931E {avg_market_cap_pct}%, rgba(247, 147, 30, 0.1) {avg_market_cap_pct}%); border-radius: 6px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid rgba(247, 147, 30, 0.3); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                <span style="color: #FFFFFF; font-weight: 600; font-size: 0.75rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">💰 Cap. Média</span>
+                <span style="color: #FFFFFF; font-weight: 600; font-size: 0.75rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">💰 Avg. Cap</span>
                 <span style="color: #FFFFFF; font-weight: 700; font-size: 0.8rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">${avg_market_cap:.1f}B</span>
             </div>
             <div style="background: rgba(255, 255, 255, 0.3); border-radius: 3px; height: 2px; margin: 0.25rem 0;">
@@ -552,13 +585,13 @@ def show_home_page(df, df_potencial, model):
     </div>
     """, unsafe_allow_html=True)
     
-    # Características principais com cards premium
+    # Main features with premium cards
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
         <div class="data-card">
-            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem; font-size: 0.95rem;">🔧 Características Técnicas</h3>
+            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem; font-size: 0.95rem;">🔧 Technical Features</h3>
             <ul style="color: #FAFAFA; line-height: 1.4; margin: 0; font-size: 0.75rem;">
                 <li><strong>Algoritmo</strong>: Random Forest</li>
                 <li><strong>Features</strong>: 15+ indicadores financeiros</li>
@@ -589,7 +622,12 @@ def show_home_page(df, df_potencial, model):
 def show_data_analysis(df):
     """Análise detalhada dos dados"""
     st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">📊 Data Analysis</h2>', unsafe_allow_html=True)
-    
+
+    if df is None:
+        st.info("📊 **Data Analysis will be available once the dataset is loaded.**")
+        st.info("The data is being downloaded from GitHub. Please wait a moment and try again.")
+        return
+
     # Estatísticas gerais
     st.markdown("### 📈 Estatísticas Gerais")
     
@@ -689,14 +727,23 @@ def show_model_info(model):
                         
                         st.dataframe(importance_df.head(10), width='stretch')
     else:
-        st.error("Model not loaded. Please verify that the model file exists.")
+        st.error("❌ Model not loaded. Please check your connection and try again.")
+        st.info("💡 **Model Information:**")
+        st.info("- The model will be downloaded automatically from GitHub")
+        st.info("- Please ensure you have an active internet connection")
+        st.info("- Check the **System Status** in the sidebar for more details")
+
+        if st.button("🔄 Retry Loading Model", key="retry_model"):
+            st.rerun()
 
 def show_predictions_interface(df, model):
     """Interface para predições - SPA com abas para predição individual e batch"""
     st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🔮 Interface de Predictions</h2>', unsafe_allow_html=True)
     
     if model is None:
-        st.error("Model not loaded. Cannot make predictions.")
+        st.error("❌ Model not loaded. Cannot make predictions.")
+        st.info("💡 **Please wait:** The model is being downloaded from GitHub.")
+        st.info("Once loaded, you'll be able to make predictions here.")
         return
     
     # Criar abas para diferentes tipos de predição
@@ -1175,7 +1222,7 @@ def show_prediction_interpretation(potential, confidence):
     if potential == 'High':
         st.markdown("""
         <div class="success-box">
-            <h4 style="color: #FFD23F; margin-bottom: 0.5rem;">🚀 High Potential de Crescimento</h4>
+            <h4 style="color: #FFD23F; margin-bottom: 0.5rem;">🚀 High Growth Potential</h4>
             <p>This company presents indicators that suggest <strong>high growth potential</strong>. 
             The factors analyzed indicate favorable opportunities for investment and expansion.</p>
         </div>
@@ -1183,7 +1230,7 @@ def show_prediction_interpretation(potential, confidence):
     elif potential == 'Medium':
         st.markdown("""
         <div class="info-box">
-            <h4 style="color: #F7931E; margin-bottom: 0.5rem;">⚖️ Medium Potential de Crescimento</h4>
+            <h4 style="color: #F7931E; margin-bottom: 0.5rem;">⚖️ Medium Growth Potential</h4>
             <p>This company presents a <strong>moderate growth potential</strong>. 
             There are opportunities, but also some challenges that should be considered in decision-making.</p>
         </div>
@@ -1191,7 +1238,7 @@ def show_prediction_interpretation(potential, confidence):
     else:
         st.markdown("""
         <div class="warning-box">
-            <h4 style="color: #FF6B6B; margin-bottom: 0.5rem;">⚠️ Low Potential de Crescimento</h4>
+            <h4 style="color: #FF6B6B; margin-bottom: 0.5rem;">⚠️ Low Growth Potential</h4>
             <p>This company presents indicators that suggest <strong>low growth potential</strong>. 
             A more detailed analysis is recommended before significant investments.</p>
         </div>
@@ -1218,9 +1265,15 @@ def show_prediction_interpretation(potential, confidence):
 def show_insights(df, df_potencial):
     """Mostra insights e análises avançadas"""
     st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">💡 Advanced Insights and Analysis</h2>', unsafe_allow_html=True)
-    
+
+    if df is None:
+        st.info("💡 **Advanced Insights will be available once the dataset is loaded.**")
+        st.info("This section provides detailed analysis of company data including geographic distribution, financial metrics, and growth patterns.")
+        st.info("Please wait for the data to load from GitHub.")
+        return
+
     if 'pc_class' not in df.columns:
-        st.info("Dados de classificação não disponíveis. Execute o pipeline de classificação primeiro.")
+        st.info("Classification data not available. Please run the classification pipeline first.")
         return
     
     # Criar abas para diferentes tipos de insights
@@ -1387,12 +1440,12 @@ def show_financial_insights(df):
     col1, col2 = st.columns(2)
     
     with col1:
-        # P/E Ratio por potencial
+        # P/E Ratio by potential
         fig = px.violin(
             df[df['pe_ratio_ttm'] > 0],  # Filtrar P/E positivos
             x='pc_class', 
             y='pe_ratio_ttm',
-            title="P/E Ratio por Potential de Crescimento",
+            title="P/E Ratio by Growth Potential",
             labels={'pc_class': 'Potential', 'pe_ratio_ttm': 'P/E Ratio'}
         )
         
@@ -1405,12 +1458,12 @@ def show_financial_insights(df):
         st.plotly_chart(fig, width='stretch')
     
     with col2:
-        # Dividend Yield por potencial
+        # Dividend Yield by potential
         fig = px.violin(
             df[df['dividend_yield_ttm'] > 0],  # Filtrar dividend yields positivos
             x='pc_class', 
             y='dividend_yield_ttm',
-            title="Dividend Yield por Potential de Crescimento",
+            title="Dividend Yield by Growth Potential",
             labels={'pc_class': 'Potential', 'dividend_yield_ttm': 'Dividend Yield (%)'}
         )
         
@@ -1467,8 +1520,8 @@ def show_correlation_insights(df):
     
     st.plotly_chart(fig, width='stretch')
     
-    # Correlações com potencial de crescimento
-    st.markdown("#### 🎯 Correlações com Potential de Crescimento")
+    # Correlations with growth potential
+    st.markdown("#### 🎯 Correlations with Growth Potential")
     
     # Calcular correlações com pc_class
     correlations_with_potential = df[numeric_cols].corrwith(df['pc_class']).sort_values(ascending=False)
@@ -1781,15 +1834,15 @@ def show_advanced_insights(df):
     with col3:
         st.metric("Cap. Média", f"${avg_market_cap:.1f}B")
     
-    # Insights finais
+    # Final insights
     st.markdown("""
     <div class="info-box">
-        <h4 style="color: #FF6B35; margin-bottom: 0.5rem;">🎯 Principais Insights</h4>
+        <h4 style="color: #FF6B35; margin-bottom: 0.5rem;">🎯 Main Insights</h4>
         <ul>
-            <li><strong>Diversificação Geográfica:</strong> O dataset apresenta empresas de múltiplos países com diferentes perfis de potencial.</li>
-            <li><strong>Correlações Financeiras:</strong> Existem correlações significativas entre indicadores financeiros e potencial de crescimento.</li>
-            <li><strong>Oportunidades de Investimento:</strong> Empresas com características similares às de alto potencial podem representar oportunidades.</li>
-            <li><strong>Análise de Risco:</strong> A identificação de outliers ajuda na avaliação de riscos e oportunidades.</li>
+            <li><strong>Geographic Diversification:</strong> The dataset presents companies from multiple countries with different potential profiles.</li>
+            <li><strong>Financial Correlations:</strong> There are significant correlations between financial indicators and growth potential.</li>
+            <li><strong>Investment Opportunities:</strong> Companies with characteristics similar to high potential ones may represent opportunities.</li>
+            <li><strong>Risk Analysis:</strong> Outlier identification helps in risk and opportunity assessment.</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)

@@ -13,6 +13,11 @@ headless = true
 enableXsrfProtection = true
 enableCORS = false
 
+# Performance optimizations for Streamlit Cloud
+maxUploadSize = 200
+maxMessageSize = 200
+enableWebsocketCompression = true
+
 [browser]
 # Browser settings
 gatherUsageStats = false

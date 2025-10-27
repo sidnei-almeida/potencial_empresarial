@@ -1,0 +1,16 @@
+# Streamlit configuration for deployment
+[server]
+headless = true
+address = "0.0.0.0"
+
+# Disable features that might cause issues in cloud
+enableCORS = false
+enableXsrfProtection = true
+
+# Performance settings
+maxUploadSize = 200
+maxMessageSize = 200
+enableWebsocketCompression = true
+
+[theme]
+base = "dark"
