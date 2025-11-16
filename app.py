@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import requests
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 
@@ -144,6 +145,24 @@ app = FastAPI(
         "nos países do continente americano, utilizando Random Forest."
     ),
     version="1.0.0",
+)
+
+# ---------------------------------------------------------
+# CORS
+# ---------------------------------------------------------
+
+# Ajuste esta lista para os domínios reais do front-end em produção
+origins = [
+    "*",  # para desenvolvimento; em produção, preferir domínios específicos
+    # "https://seu-frontend.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
