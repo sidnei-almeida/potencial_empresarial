@@ -1,1885 +1,370 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import joblib
-from streamlit_option_menu import option_menu
-import warnings
-import requests
-import os
-from pathlib import Path
-import tempfile
-warnings.filterwarnings('ignore')
+"""
+API REST para previsão do potencial de crescimento de empresas.
 
-# Configurações do GitHub
+Esta API substitui a aplicação Streamlit original e expõe o modelo
+`Random_Forest_model.joblib` como serviço de previsão, com suporte a:
+- Previsão individual (um registro por vez, via JSON)
+- Previsão em batch (lista de registros via JSON)
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+import os
+import tempfile
+import time
+from typing import List, Literal, Optional
+
+import joblib
+import numpy as np
+import pandas as pd
+import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------
+# Configuração de caminhos e GitHub (mantida da versão Streamlit)
+# ---------------------------------------------------------
+
 GITHUB_USERNAME = "sidnei-almeida"
 GITHUB_REPO = "potencial_empresarial"
 GITHUB_BRANCH = "main"
 GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_REPO}/{GITHUB_BRANCH}"
 
-# URLs dos arquivos no GitHub
 DATA_URL = f"{GITHUB_BASE_URL}/dados/data.csv"
 MODEL_URL = f"{GITHUB_BASE_URL}/modelos/Random_Forest_model.joblib"
 
-# GitHub rate limiting constants
-GITHUB_RATE_LIMIT_RESET = 3600  # 1 hour in seconds
 
-@st.cache_data(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
-def download_file_from_github(url: str, filename: str) -> str:
+def download_file_from_github(url: str, filename: str, ttl_seconds: int = 7200) -> Optional[str]:
     """
-    Downloads a file from GitHub and returns the local path
+    Faz download de um arquivo do GitHub para um diretório temporário e
+    retorna o caminho local. Usa cache simples baseado em mtime.
     """
-    import time
-
     try:
-        # Create temporary directory if it doesn't exist
         temp_dir = Path(tempfile.gettempdir()) / "potencial_empresarial"
         temp_dir.mkdir(exist_ok=True)
 
         file_path = temp_dir / filename
 
-        # Check if file already exists and is recent (2 hours cache)
+        # Cache baseado em mtime
         if file_path.exists():
-            file_age = os.path.getmtime(file_path)
-            current_time = time.time()
-            if (current_time - file_age) < 7200:  # 2 hours in seconds
-                print(f"Using cached file: {filename}")
+            file_age = time.time() - os.path.getmtime(file_path)
+            if file_age < ttl_seconds:
+                print(f"[download_file_from_github] Using cached file: {filename}")
                 return str(file_path)
 
-        # Download file from GitHub with proper headers to avoid rate limiting
-        print(f"Downloading {filename} from GitHub...")
+        print(f"[download_file_from_github] Downloading {filename} from GitHub...")
         headers = {
-            'User-Agent': 'Business-Growth-Potential-App/1.0',
-            'Accept': 'application/vnd.github.v3.raw'
+            "User-Agent": "Business-Growth-Potential-API/1.0",
+            "Accept": "application/vnd.github.v3.raw",
         }
         response = requests.get(url, timeout=60, headers=headers)
-
-        # Handle rate limiting (429) and other HTTP errors
-        if response.status_code == 429:
-            print(f"GitHub rate limit exceeded for {filename}. Using fallback or cached version.")
-            # Try to use existing file even if it's older
+        if response.status_code in (403, 429):
+            # Problema de rate limiting ou permissão — tenta usar arquivo antigo
             if file_path.exists():
-                print(f"Using older cached file: {filename}")
+                print(
+                    f"[download_file_from_github] GitHub returned {response.status_code}, "
+                    f"using cached file for {filename}"
+                )
                 return str(file_path)
-            else:
-                print(f"No cached file available for {filename}")
-                return None
-        elif response.status_code == 403:
-            print(f"Access forbidden for {filename}. This might be a permissions issue.")
-            # Try to use existing file
-            if file_path.exists():
-                print(f"Using cached file due to 403 error: {filename}")
-                return str(file_path)
-            else:
-                return None
-        else:
-            response.raise_for_status()
+            return None
 
-        print(f"Successfully downloaded {filename}")
+        response.raise_for_status()
 
-        # Save file
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             f.write(response.content)
 
+        print(f"[download_file_from_github] Successfully downloaded {filename}")
         return str(file_path)
-
     except Exception as e:
-        print(f"Error downloading {filename} from GitHub: {str(e)}")
-        # Return cached file if available, even if older
-        if file_path.exists():
-            print(f"Using cached file due to error: {filename}")
+        print(f"[download_file_from_github] Error downloading {filename}: {e}")
+        if "file_path" in locals() and file_path.exists():
+            print(f"[download_file_from_github] Using cached file due to error: {filename}")
             return str(file_path)
         return None
 
-@st.cache_data(ttl=1800)  # Cache for 30 minutes to avoid excessive requests
-def check_github_connection():
-    """Checks if the connection with GitHub is working"""
+
+def load_model() -> Optional[object]:
+    """
+    Carrega o modelo Random Forest treinado.
+    Prioriza o arquivo local `modelos/Random_Forest_model.joblib`.
+    Se não existir, tenta baixar do GitHub.
+    """
     try:
-        headers = {
-            'User-Agent': 'Business-Growth-Potential-App/1.0'
-        }
-        response = requests.get(f"https://github.com/{GITHUB_USERNAME}/{GITHUB_REPO}", timeout=10, headers=headers)
-        return response.status_code == 200
-    except:
-        return False
+        local_path = Path("modelos") / "Random_Forest_model.joblib"
+        if local_path.exists():
+            print(f"[load_model] Loading model from local path: {local_path}")
+            return joblib.load(local_path)
 
-# Page configuration
-st.set_page_config(
-    page_title="Business Growth Potential",
-    page_icon="🚀",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
-)
+        # Fallback: baixar do GitHub
+        model_path = download_file_from_github(MODEL_URL, "Random_Forest_model.joblib")
+        if model_path:
+            print(f"[load_model] Loading model from GitHub cache: {model_path}")
+            return joblib.load(model_path)
 
-# CSS personalizado para tema escuro elegante com cores quentes
-st.markdown("""
-<style>
-    /* Importar fontes elegantes */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Variáveis de cores premium - PALETA QUENTE */
-    :root {
-        --primary-color: #FF6B35;
-        --secondary-color: #F7931E;
-        --accent-color: #FFD23F;
-        --success-color: #FF8C42;
-        --warning-color: #FF6B6B;
-        --dark-bg: #0E1117;
-        --card-bg: #1E1E1E;
-        --text-primary: #FAFAFA;
-        --text-secondary: #B0B0B0;
-        --gradient-primary: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
-        --gradient-secondary: linear-gradient(135deg, #FFD23F 0%, #FF8C42 100%);
-        --gradient-dark: linear-gradient(135deg, #1E1E1E 0%, #2D2D2D 100%);
-        --shadow-soft: 0 8px 32px rgba(255, 107, 53, 0.3);
-        --shadow-hover: 0 12px 40px rgba(255, 107, 53, 0.4);
-    }
-    
-    /* Estilo global */
-    .stApp {
-        background: var(--dark-bg);
-        color: var(--text-primary);
-    }
-    
-    /* Ajustar o container principal para usar toda a largura */
-    .main .block-container {
-        max-width: none !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }
-    
-    /* Header principal */
-    .main-header {
-        font-family: 'Inter', sans-serif;
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: var(--gradient-primary);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        text-shadow: 0 4px 8px rgba(255, 107, 53, 0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-    }
-    
-    /* Cards de métricas premium */
-    .metric-card {
-        background: var(--gradient-dark);
-        padding: 1rem;
-        border-radius: 12px;
-        color: var(--text-primary);
-        text-align: center;
-        margin: 0.3rem 0;
-        border: 1px solid rgba(255, 107, 53, 0.2);
-        box-shadow: var(--shadow-soft);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .metric-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: var(--gradient-primary);
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-hover);
-        border-color: var(--primary-color);
-    }
-    
-    /* Cards de informação */
-    .info-box {
-        background: var(--card-bg);
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid var(--primary-color);
-        margin: 1rem 0;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .success-box {
-        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(247, 147, 30, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid var(--primary-color);
-        margin: 1rem 0;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(255, 107, 53, 0.3);
-    }
-    
-    .warning-box {
-        background: linear-gradient(135deg, rgba(255, 139, 66, 0.1) 0%, rgba(255, 107, 107, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid var(--warning-color);
-        margin: 1rem 0;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(255, 107, 107, 0.3);
-    }
-    
-    /* Botões premium */
-    .stButton > button {
-        background: var(--gradient-primary);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: var(--shadow-soft);
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-hover);
-    }
-    
-    /* Sidebar elegante */
-    .css-1d391kg {
-        background: var(--card-bg);
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Títulos elegantes */
-    h1, h2, h3, h4, h5, h6 {
-        color: var(--text-primary);
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
-    }
-    
-    /* Texto secundário */
-    .text-secondary {
-        color: var(--text-secondary);
-    }
-    
-    /* Cards de dados */
-    .data-card {
-        background: var(--card-bg);
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Animações suaves */
-    .fade-in {
-        animation: fadeIn 0.6s ease-in;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* Scrollbar personalizada */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: var(--dark-bg);
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: var(--primary-color);
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--secondary-color);
-    }
-</style>
-""", unsafe_allow_html=True)
-
-@st.cache_data(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
-def load_data():
-    """Loads company data from GitHub or locally"""
-    try:
-        df = None
-
-        # Try to load locally first
-        try:
-            if os.path.exists('dados/data.csv'):
-                df = pd.read_csv('dados/data.csv')
-            else:
-                # Download from GitHub
-                data_path = download_file_from_github(DATA_URL, "data.csv")
-                if data_path:
-                    df = pd.read_csv(data_path)
-                else:
-                    return None, None
-        except Exception as e:
-            print(f"Error loading data: {e}")
-            return None, None
-
-        return df, None  # Always returns None for df_potencial as it's no longer used
-
+        print("[load_model] Could not load model from local or GitHub")
+        return None
     except Exception as e:
-        print(f"Error loading data: {e}")
-        return None, None
-
-@st.cache_resource(ttl=7200)  # Cache for 2 hours to reduce GitHub requests
-def load_model():
-    """Loads the trained model from GitHub or locally"""
-    try:
-        model = None
-        
-        # Try to load locally first
-        if os.path.exists('modelos/Random_Forest_model.joblib'):
-            model = joblib.load('modelos/Random_Forest_model.joblib')
-        else:
-            # Download from GitHub
-            model_path = download_file_from_github(MODEL_URL, "Random_Forest_model.joblib")
-            if model_path:
-                model = joblib.load(model_path)
-            else:
-                return None
-        
-        return model
-        
-    except Exception as e:
-        print(f"Error loading model: {e}")
+        print(f"[load_model] Error loading model: {e}")
         return None
 
-def show_system_status(model, df):
-    """Shows the status of system components"""
-    
-    # Model Status
-    model_status = "✅ Loaded" if model is not None else "❌ Error"
-    model_color = "#FF6B35" if model is not None else "#FF6B6B"
-    model_source = "Local" if os.path.exists('modelos/Random_Forest_model.joblib') else "GitHub"
-    
-    st.markdown(f"""
-    <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {model_color};">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">🤖 Model Random Forest ({model_source})</span>
-            <span style="color: {model_color}; font-weight: 700;">{model_status}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Data Status
-    data_status = "✅ Loaded" if df is not None else "❌ Error"
-    data_color = "#FF6B35" if df is not None else "#FF6B6B"
-    data_source = "Local" if os.path.exists('dados/data.csv') else "GitHub"
-    
-    st.markdown(f"""
-    <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {data_color};">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">📊 Companies Dataset ({data_source})</span>
-            <span style="color: {data_color}; font-weight: 700;">{data_status}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # GitHub Connection Status
-    github_connected = check_github_connection()
-    github_status = "✅ Connected" if github_connected else "⚠️ No connection"
-    github_color = "#FF6B35" if github_connected else "#FFD23F"
 
-    # Check for rate limiting by trying to access a small file
-    rate_limit_info = ""
-    if github_connected:
-        try:
-            headers = {'User-Agent': 'Business-Growth-Potential-App/1.0'}
-            response = requests.head(DATA_URL, timeout=5, headers=headers)
-            if response.status_code == 403:
-                github_status = "⚠️ Rate Limited"
-                github_color = "#FFD23F"
-                rate_limit_info = " (Rate limited by GitHub)"
-            elif response.status_code == 429:
-                github_status = "⏳ Rate Limited"
-                github_color = "#FF6B6B"
-                rate_limit_info = " (Please wait before retrying)"
-        except:
-            pass
+def load_example_data() -> Optional[pd.DataFrame]:
+    """
+    Carrega o dataset de exemplo para fins de documentação / sanity check.
+    Não é obrigatório para a API funcionar.
+    """
+    try:
+        local_path = Path("dados") / "data.csv"
+        if local_path.exists():
+            print(f"[load_example_data] Loading data from local path: {local_path}")
+            return pd.read_csv(local_path)
 
-    st.markdown(f"""
-    <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid {github_color};">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #FAFAFA; font-weight: 600;">🌐 GitHub Connection{rate_limit_info}</span>
-            <span style="color: {github_color}; font-weight: 700;">{github_status}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        data_path = download_file_from_github(DATA_URL, "data.csv")
+        if data_path:
+            print(f"[load_example_data] Loading data from GitHub cache: {data_path}")
+            return pd.read_csv(data_path)
 
-def show_project_info(df):
-    """Shows project information"""
-    
-    if df is not None:
-        # Total companies
-        st.markdown(f"""
-        <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid #FF6B35;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #FAFAFA; font-weight: 600;">🏢 Total Companies</span>
-                <span style="color: #FF6B35; font-weight: 700;">{len(df):,}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Unique countries
-        st.markdown(f"""
-        <div style="background: rgba(255, 107, 53, 0.1); padding: 0.8rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid #FF6B35;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #FAFAFA; font-weight: 600;">🌍 Countries</span>
-                <span style="color: #FF6B35; font-weight: 700;">{df['country'].nunique()}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        print("[load_example_data] Could not load data from local or GitHub")
+        return None
+    except Exception as e:
+        print(f"[load_example_data] Error loading data: {e}")
+        return None
 
-def main():
-    # Main title with premium design
-    st.markdown('<h1 class="main-header fade-in">🚀 Business Growth Potential</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="text-secondary" style="text-align: center; font-size: 1.2rem; margin-bottom: 3rem;">Intelligent Business Growth Potential Analysis using Machine Learning</p>', unsafe_allow_html=True)
 
-    # Load data and model
-    df, df_potencial = load_data()
-    model = load_model()
+# ---------------------------------------------------------
+# Definição da API (FastAPI)
+# ---------------------------------------------------------
 
-    # Show loading state while data is being loaded
-    if df is None:
-        st.error("❌ Could not load data. Please check your internet connection and try again.")
-        st.info("💡 **Troubleshooting tips:**")
-        st.info("- Ensure you have an active internet connection")
-        st.info("- Check if GitHub is accessible")
-        st.info("- Wait a few moments and refresh the page")
+app = FastAPI(
+    title="Business Growth Potential API",
+    description=(
+        "API REST para previsão do potencial de crescimento de empresas "
+        "nos países do continente americano, utilizando Random Forest."
+    ),
+    version="1.0.0",
+)
 
-        st.markdown("---")
-        st.markdown("### 🔄 Manual Retry")
-        if st.button("🔄 Try Again", type="primary"):
-            st.rerun()
 
-        # Show alternative interface when data is not available
-        st.markdown("---")
-        st.markdown("### 📋 Alternative Options")
-        st.info("While waiting for data to load, you can:")
-        st.info("• Check the **Model** tab for information about the ML model")
-        st.info("• Use the **Form-Based Prediction** tab for manual predictions")
-        st.info("• View the **Advanced Insights** tab (if available)")
+# Modelo carregado em memória na inicialização
+MODEL = load_model()
+EXAMPLE_DF = load_example_data()
 
-        return
-    
-    # # Premium navigation menu with streamlit-option-menu
-    with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 2rem;">
-            <h2 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 700;">🎯 Navigation</h2>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        selected = option_menu(
-            menu_title=None,
-            options=["Home", "Data Analysis", "Model", "Predictions", "Insights"],
-            icons=["house", "bar-chart", "cpu", "magic", "lightbulb"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#FF6B35", "font-size": "20px"},
-                "nav-link": {
-                    "font-size": "16px",
-                    "text-align": "left",
-                    "margin": "0px",
-                    "--hover-color": "#1E1E1E",
-                    "color": "#B0B0B0",
-                    "font-family": "'Inter', sans-serif",
-                    "font-weight": "500",
-                },
-                "nav-link-selected": {
-                    "background-color": "rgba(255, 107, 53, 0.1)",
-                    "color": "#FF6B35",
-                    "border-left": "4px solid #FF6B35",
-                    "border-radius": "8px",
-                },
-            }
-        )
-        
-        # # Separator
-        st.markdown("---")
-        
-        # System Status
-        st.markdown("""
-        <div style="margin-bottom: 1.5rem;">
-            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 1rem;">📊 System Status</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # # Component Status
-        show_system_status(model, df)
-        
-        # # Separator
-        st.markdown("---")
-        
-        # # Project Information
-        st.markdown("""
-        <div style="margin-bottom: 1.5rem;">
-            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 1rem;">ℹ️ Information</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        show_project_info(df)
-    
-    # Navigation baseada na seleção
-    if selected == "Home":
-        show_home_page(df, df_potencial, model)
-    elif selected == "Data Analysis":
-        show_data_analysis(df)
-    elif selected == "Model":
-        show_model_info(model)
-    elif selected == "Predictions":
-        show_predictions_interface(df, model)
-    elif selected == "Insights":
-        show_insights(df, df_potencial)
 
-def show_home_page(df, df_potencial, model):
-    """Página inicial com visão geral premium"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🎯 Project Overview</h2>', unsafe_allow_html=True)
+PotentialLabel = Literal["Low", "Medium", "High"]
 
-    if df is None:
-        st.info("🏠 **Home page will be available once the dataset is loaded.**")
-        st.info("The dashboard shows company statistics and growth potential analysis.")
-        st.info("Please wait for the data to load from GitHub.")
-        return
 
-    # Cards de métricas premium
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # # Distribution by growth potential
-        if 'pc_class' in df.columns:
-            high_potential = len(df[df['pc_class'] == 2])
-            total_companies = len(df)
-            high_potential_pct = (high_potential / total_companies) * 100
-            
-            st.markdown(f'''
-            <div class="fade-in" style="background: linear-gradient(90deg, #FF6B35 {high_potential_pct}%, rgba(255, 107, 53, 0.1) {high_potential_pct}%); border-radius: 6px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid rgba(255, 107, 53, 0.3); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <span style="color: #FFFFFF; font-weight: 600; font-size: 0.75rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">🚀 High Potential</span>
-                    <span style="color: #FFFFFF; font-weight: 700; font-size: 0.8rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">{high_potential:,}</span>
-                </div>
-                <div style="background: rgba(255, 255, 255, 0.3); border-radius: 3px; height: 2px; margin: 0.25rem 0;">
-                    <div style="background: rgba(255, 255, 255, 0.6); height: 100%; width: 100%; border-radius: 3px;"></div>
-                </div>
-                <p style="color: #FFFFFF; margin-top: 0.25rem; font-size: 0.65rem; margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">Companies with high growth potential</p>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with col2:
-        # # Average market capitalization
-        avg_market_cap = df['marketcap'].mean() / 1e9  # Em bilhões
-        avg_market_cap_pct = min(avg_market_cap / 10, 100)  # Normalizar para 0-100%
-        
-        st.markdown(f'''
-        <div class="fade-in" style="background: linear-gradient(90deg, #F7931E {avg_market_cap_pct}%, rgba(247, 147, 30, 0.1) {avg_market_cap_pct}%); border-radius: 6px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid rgba(247, 147, 30, 0.3); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                <span style="color: #FFFFFF; font-weight: 600; font-size: 0.75rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">💰 Avg. Cap</span>
-                <span style="color: #FFFFFF; font-weight: 700; font-size: 0.8rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">${avg_market_cap:.1f}B</span>
-            </div>
-            <div style="background: rgba(255, 255, 255, 0.3); border-radius: 3px; height: 2px; margin: 0.25rem 0;">
-                <div style="background: rgba(255, 255, 255, 0.6); height: 100%; width: 100%; border-radius: 3px;"></div>
-            </div>
-            <p style="color: #FFFFFF; margin-top: 0.25rem; font-size: 0.65rem; margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">Capitalization média de mercado</p>
-        </div>
-        ''', unsafe_allow_html=True)
-    
-    with col3:
-        # Diversidade geográfica
-        countries_count = df['country'].nunique()
-        countries_pct = min((countries_count / 50) * 100, 100)  # Normalizar para 0-100%
-        
-        st.markdown(f'''
-        <div class="fade-in" style="background: linear-gradient(90deg, #FFD23F {countries_pct}%, rgba(255, 210, 63, 0.1) {countries_pct}%); border-radius: 6px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid rgba(255, 210, 63, 0.3); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                <span style="color: #FFFFFF; font-weight: 600; font-size: 0.75rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">🌍 Countries</span>
-                <span style="color: #FFFFFF; font-weight: 700; font-size: 0.8rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">{countries_count}</span>
-            </div>
-            <div style="background: rgba(255, 255, 255, 0.3); border-radius: 3px; height: 2px; margin: 0.25rem 0;">
-                <div style="background: rgba(255, 255, 255, 0.6); height: 100%; width: 100%; border-radius: 3px;"></div>
-            </div>
-            <p style="color: #FFFFFF; margin-top: 0.25rem; font-size: 0.65rem; margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">Diversidade geográfica</p>
-        </div>
-        ''', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Descrição do projeto com design premium
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 0.8rem; font-size: 1.1rem;">📝 Sobre o Projeto</h2>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="info-box">
-        <p style="font-size: 0.75rem; line-height: 1.4; margin: 0;">
-            This project implements a <strong>business growth potential analysis system</strong> using 
-            <strong>Machine Learning</strong> with Random Forest. The goal is to classify companies at different levels of 
-            growth potential based on financial and economic indicators.
-        </p>
-        <p style="font-size: 0.7rem; line-height: 1.4; margin: 0.5rem 0 0 0; color: #B0B0B0;">
-            <strong>🌐 Fonte dos Dados:</strong> Data and model are automatically loaded from GitHub 
-            (<a href="https://github.com/sidnei-almeida/potencial_empresarial" target="_blank" style="color: #FF6B35;">sidnei-almeida/potencial_empresarial</a>) 
-            quando não estão disponíveis localmente.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Main features with premium cards
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="data-card">
-            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem; font-size: 0.95rem;">🔧 Technical Features</h3>
-            <ul style="color: #FAFAFA; line-height: 1.4; margin: 0; font-size: 0.75rem;">
-                <li><strong>Algoritmo</strong>: Random Forest</li>
-                <li><strong>Features</strong>: 15+ indicadores financeiros</li>
-                <li><strong>Classes</strong>: Low, Medium, High Potential</li>
-                <li><strong>Countries</strong>: International Analysis</li>
-                <li><strong>Preprocessing</strong>: Normalization and balancing</li>
-                <li><strong>Validation</strong>: Cross-validation</li>
-                <li><strong>Métricas</strong>: Accuracy, Precision, Recall</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="data-card">
-            <h3 style="color: #FF6B35; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem; font-size: 0.95rem;">📊 Indicadores Analisados</h3>
-            <ul style="color: #FAFAFA; line-height: 1.4; margin: 0; font-size: 0.75rem;">
-                <li><strong>Financeiros</strong>: Receita, Lucros, P/E Ratio</li>
-                <li><strong>Mercado</strong>: Capitalization, Dividend Yield</li>
-                <li><strong>Macroeconomic</strong>: GDP, Inflation, Interest Rate</li>
-                <li><strong>Social</strong>: Taxa de Desemprego</li>
-                <li><strong>Cambial</strong>: Taxa de Câmbio</li>
-                <li><strong>Geográfico</strong>: Country de origem</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+class Features(BaseModel):
+    """
+    Mesma ordem e significado de features usados na interface Streamlit
+    (`show_manual_prediction`), compatível com o modelo treinado.
+    """
 
-def show_data_analysis(df):
-    """Análise detalhada dos dados"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">📊 Data Analysis</h2>', unsafe_allow_html=True)
+    dividend_yield_ttm: float = Field(..., description="Dividend Yield (%)")
+    earnings_ttm: float = Field(..., description="Earnings TTM (USD)")
+    marketcap: float = Field(..., description="Market Cap (USD)")
+    pe_ratio_ttm: float = Field(..., description="P/E Ratio (TTM)")
+    revenue_ttm: float = Field(..., description="Revenue TTM (USD)")
+    price: float = Field(..., description="Stock price (USD)")
+    gdp_per_capita_usd: float = Field(..., description="GDP per capita (USD)")
+    gdp_growth_percent: float = Field(..., description="GDP growth (%)")
+    inflation_percent: float = Field(..., description="Inflation rate (%)")
+    interest_rate_percent: float = Field(..., description="Interest rate (%)")
+    unemployment_rate_percent: float = Field(..., description="Unemployment rate (%)")
+    exchange_rate_to_usd: float = Field(..., description="Exchange rate to USD")
+    inflation: float = Field(..., description="Absolute inflation value (usually negative)")
+    interest_rate: float = Field(..., description="Absolute interest rate value (usually negative)")
+    unemployment: float = Field(..., description="Absolute unemployment value (usually negative)")
 
-    if df is None:
-        st.info("📊 **Data Analysis will be available once the dataset is loaded.**")
-        st.info("The data is being downloaded from GitHub. Please wait a moment and try again.")
-        return
 
-    # Estatísticas gerais
-    st.markdown("### 📈 Estatísticas Gerais")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Companies", f"{len(df):,}")
-    with col2:
-        st.metric("Countries Diferentes", f"{df['country'].nunique()}")
-    with col3:
-        st.metric("Capitalization Média", f"${df['marketcap'].mean()/1e9:.1f}B")
-    with col4:
-        if 'pc_class' in df.columns:
-            st.metric("High Potential", f"{len(df[df['pc_class'] == 2]):,}")
-    
-    # # Distribution by country
-    st.markdown("### 🌍 Distribution by Country")
-    
-    country_counts = df['country'].value_counts().head(10)
+class PredictionResult(BaseModel):
+    predicted_class: int = Field(..., description="Classe prevista: 0=Low, 1=Medium, 2=High")
+    predicted_potential: PotentialLabel = Field(..., description="Rótulo textual da classe prevista")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Probabilidade da classe prevista (0-1)")
+    prob_low: float = Field(..., ge=0.0, le=1.0)
+    prob_medium: float = Field(..., ge=0.0, le=1.0)
+    prob_high: float = Field(..., ge=0.0, le=1.0)
 
-    # Create DataFrame for proper color mapping
-    country_df = pd.DataFrame({
-        'country': country_counts.index,
-        'count': country_counts.values,
-        'color': country_counts.values
-    })
 
-    fig = px.bar(
-        country_df,
-        x='count',
-        y='country',
-        orientation='h',
-        title="Top 10 Countries by Number of Companies",
-        color='color',
-        color_continuous_scale='Oranges'
-    )
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#FAFAFA',
-        yaxis=dict(autorange="reversed")
-    )
-    
-    st.plotly_chart(fig, width='stretch')
-    
-    # Distribuição de potencial se disponível
-    if 'pc_class' in df.columns:
-        st.markdown("### 🎯 Growth Potential Distribution")
-        
-        potential_counts = df['pc_class'].value_counts().sort_index()
-        potential_labels = {0: 'Low', 1: 'Medium', 2: 'High'}
-        potential_names = [potential_labels[i] for i in potential_counts.index]
-        
-        fig = px.pie(
-            values=potential_counts.values,
-            names=potential_names,
-            title="Growth Potential Distribution",
-            color_discrete_sequence=['#FF6B35', '#F7931E', '#FFD23F']
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
+class BatchRequest(BaseModel):
+    instances: List[Features]
 
-def show_model_info(model):
-    """Information sobre o modelo"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🤖 Information do Model</h2>', unsafe_allow_html=True)
-    
-    if model is not None:
-        st.markdown("### 🔧 Parâmetros do Model")
-        
-        params = model.get_params()
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### 🌳 Random Forest")
-            st.json({
-                "Número de Árvores": params.get('n_estimators', 'N/A'),
-                "Profundidade Máxima": params.get('max_depth', 'N/A'),
-                "Amostras Mínimas por Folha": params.get('min_samples_leaf', 'N/A'),
-                "Amostras Mínimas para Divisão": params.get('min_samples_split', 'N/A'),
-                "Bootstrap": params.get('bootstrap', 'N/A'),
-                "Random State": params.get('random_state', 'N/A')
-            })
-        
-        with col2:
-            st.markdown("#### 📊 Importância das Features")
-            if hasattr(model, 'feature_importances_'):
-                # Load data to get feature names
-                df, _ = load_data()
-                if df is not None:
-                    feature_names = [col for col in df.columns if col not in ['name', 'country', 'pc_class']]
-                    
-                    if len(feature_names) == len(model.feature_importances_):
-                        importance_df = pd.DataFrame({
-                            'Feature': feature_names,
-                            'Importance': model.feature_importances_
-                        }).sort_values('Importance', ascending=False)
-                        
-                        st.dataframe(importance_df.head(10), width='stretch')
-    else:
-        st.error("❌ Model not loaded. Please check your connection and try again.")
-        st.info("💡 **Model Information:**")
-        st.info("- The model will be downloaded automatically from GitHub")
-        st.info("- Please ensure you have an active internet connection")
-        st.info("- Check the **System Status** in the sidebar for more details")
 
-        if st.button("🔄 Retry Loading Model", key="retry_model"):
-            st.rerun()
+class BatchPredictionResult(BaseModel):
+    predictions: List[PredictionResult]
 
-def show_predictions_interface(df, model):
-    """Interface para predições - SPA com abas para predição individual e batch"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">🔮 Interface de Predictions</h2>', unsafe_allow_html=True)
-    
-    if model is None:
-        st.error("❌ Model not loaded. Cannot make predictions.")
-        st.info("💡 **Please wait:** The model is being downloaded from GitHub.")
-        st.info("Once loaded, you'll be able to make predictions here.")
-        return
-    
-    # Criar abas para diferentes tipos de predição
-    tab1, tab2, tab3 = st.tabs(["🏢 Predição Individual", "📊 Predição por Campos", "📋 Batch Prediction"])
-    
-    with tab1:
-        show_company_prediction(df, model)
-    
-    with tab2:
-        show_manual_prediction(model)
-    
-    with tab3:
-        show_batch_prediction(df, model)
 
-def show_company_prediction(df, model):
-    """Prediction based on existing company in dataset"""
-    st.markdown("### 🏢 Select Company for Analysis")
-    
-    # # Filter by country
-    countries = df['country'].unique()
-    selected_country = st.selectbox("Select Country:", countries, key="country_select")
-    
-    # # Filter companies by country
-    df_filtered = df[df['country'] == selected_country]
-    
-    if len(df_filtered) > 0:
-        # # Select company
-        company_names = df_filtered['name'].tolist()
-        selected_company = st.selectbox("Select Company:", company_names, key="company_select")
-        
-        if selected_company:
-            # # Get data from selected company
-            company_data = df_filtered[df_filtered['name'] == selected_company].iloc[0]
-            
-            # # Show company information
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("#### 📊 Company Information")
-                st.markdown(f"""
-                <div class="info-box">
-                    <p><strong>Name:</strong> {selected_company}</p>
-                    <p><strong>Country:</strong> {selected_country}</p>
-                    <p><strong>Capitalization:</strong> ${company_data['marketcap']/1e9:.2f}B</p>
-                    <p><strong>Receita TTM:</strong> ${company_data['revenue_ttm']/1e6:.2f}M</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                # Preparar features para predição
-                feature_cols = [col for col in df.columns if col not in ['name', 'country', 'pc_class']]
-                X_company = company_data[feature_cols].values.reshape(1, -1)
-                
-                # Fazer predição
-                if st.button("🔍 Analyze Potential", type="primary", key="analyze_company"):
-                    with st.spinner("Analisando..."):
-                        prediction = model.predict(X_company)[0]
-                        probabilities = model.predict_proba(X_company)[0]
-                        
-                        # Mapear predição para rótulo
-                        potential_labels = {0: 'Low', 1: 'Medium', 2: 'High'}
-                        predicted_label = potential_labels[prediction]
-                        
-                        # Cores baseadas na predição
-                        colors = {'Low': '#FF6B6B', 'Medium': '#F7931E', 'High': '#FFD23F'}
-                        color = colors[predicted_label]
-                        
-                        # Mostrar resultado
-                        st.markdown(f'''
-                        <h3 style="color: {color}; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem;">🎯 Potential: {predicted_label}</h3>
-                        <div style="background: {color}; border-radius: 8px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid {color};">
-                            <p style="color: #FFFFFF; font-size: 0.75rem; margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">
-                                Confidence: {probabilities[prediction]:.1%}<br>
-                                Company: {selected_company}
-                            </p>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                        
-                        # Probability chart
-                        prob_df = pd.DataFrame({
-                            'Potential': ['Low', 'Medium', 'High'],
-                            'Probability': probabilities
-                        })
-                        
-                        fig = px.bar(
-                            prob_df,
-                            x='Potential',
-                            y='Probability',
-                            title='Classification Probabilities',
-                            color='Probability',
-                            color_continuous_scale='Oranges'
-                        )
-                        
-                        fig.update_layout(
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font_color='#FAFAFA'
-                        )
-                        
-                        st.plotly_chart(fig, width='stretch')
-    else:
-        st.warning(f"No companies found for country {selected_country}")
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    n_example_rows: Optional[int] = None
 
-def show_manual_prediction(model):
-    """Predição manual baseada em campos de entrada (SPA)"""
-    st.markdown("### 📊 Personalized Analysis")
-    st.markdown("Enter the values of financial and macroeconomic indicators for analysis:")
-    
-    # Criar formulário com campos de entrada
-    with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### 💰 Indicadores Financeiros")
-            dividend_yield = st.number_input(
-                "Dividend Yield (%)",
-                min_value=0.0,
-                max_value=50.0,
-                value=2.5,
-                step=0.1,
-                help="Rendimento de dividendos em porcentagem"
-            )
-            
-            earnings_ttm = st.number_input(
-                "Earnings TTM (USD)",
-                min_value=-1e12,
-                max_value=1e12,
-                value=1000000.0,
-                step=100000.0,
-                format="%.0f",
-                help="Lucros dos últimos 12 meses"
-            )
-            
-            marketcap = st.number_input(
-                "Market Cap (USD)",
-                min_value=1000.0,
-                max_value=5e12,
-                value=1000000000.0,
-                step=10000000.0,
-                format="%.0f",
-                help="Capitalization de mercado"
-            )
-            
-            pe_ratio = st.number_input(
-                "P/E Ratio",
-                min_value=-100.0,
-                max_value=1000.0,
-                value=15.0,
-                step=0.1,
-                help="Price/Earnings Ratio"
-            )
-            
-            revenue_ttm = st.number_input(
-                "Revenue TTM (USD)",
-                min_value=0.0,
-                max_value=1e13,
-                value=5000000000.0,
-                step=100000000.0,
-                format="%.0f",
-                help="Receita dos últimos 12 meses"
-            )
-            
-            price = st.number_input(
-                "Stock Price (USD)",
-                min_value=0.01,
-                max_value=10000.0,
-                value=50.0,
-                step=0.01,
-                help="Stock Price"
-            )
-        
-        with col2:
-            st.markdown("#### 🌍 Indicadores Macroeconomic")
-            gdp_per_capita = st.number_input(
-                "GDP per Capita (USD)",
-                min_value=100.0,
-                max_value=200000.0,
-                value=50000.0,
-                step=100.0,
-                help="GDP per capita"
-            )
-            
-            gdp_growth = st.number_input(
-                "GDP Growth (%)",
-                min_value=-20.0,
-                max_value=20.0,
-                value=2.5,
-                step=0.1,
-                help="Crescimento do GDP"
-            )
-            
-            inflation_percent = st.number_input(
-                "Inflation (%)",
-                min_value=-10.0,
-                max_value=100.0,
-                value=2.5,
-                step=0.1,
-                help="Inflation rate"
-            )
-            
-            interest_rate_percent = st.number_input(
-                "Interest Rate (%)",
-                min_value=-10.0,
-                max_value=50.0,
-                value=4.875,
-                step=0.1,
-                help="Taxa de juros"
-            )
-            
-            unemployment_rate_percent = st.number_input(
-                "Unemployment Rate (%)",
-                min_value=0.0,
-                max_value=50.0,
-                value=3.7,
-                step=0.1,
-                help="Taxa de desemprego"
-            )
-            
-            exchange_rate = st.number_input(
-                "Exchange Rate to USD",
-                min_value=0.001,
-                max_value=10000.0,
-                value=1.0,
-                step=0.01,
-                help="Taxa de câmbio para USD"
-            )
-            
-            # Features adicionais necessárias para o modelo
-            st.markdown("#### 📊 Indicadores Adicionais")
-            inflation = st.number_input(
-                "Inflation (Valor Absoluto)",
-                min_value=-10.0,
-                max_value=100.0,
-                value=-2.5,
-                step=0.1,
-                help="Absolute inflation value (usually negative)"
-            )
-            
-            interest_rate = st.number_input(
-                "Interest Rate (Valor Absoluto)",
-                min_value=-50.0,
-                max_value=50.0,
-                value=-4.875,
-                step=0.1,
-                help="Valor absoluto da taxa de juros (geralmente negativo)"
-            )
-            
-            unemployment = st.number_input(
-                "Unemployment (Valor Absoluto)",
-                min_value=-50.0,
-                max_value=50.0,
-                value=-3.7,
-                step=0.1,
-                help="Valor absoluto da taxa de desemprego (geralmente negativo)"
-            )
-        
-        # Botão de submissão
-        submitted = st.form_submit_button("🔍 Analyze Potential", type="primary")
-        
-        if submitted:
-            # Preparar dados para predição (15 features na ordem correta)
-            input_data = np.array([[
-                dividend_yield, earnings_ttm, marketcap, pe_ratio, revenue_ttm, price,
-                gdp_per_capita, gdp_growth, inflation_percent, interest_rate_percent, 
-                unemployment_rate_percent, exchange_rate, inflation, interest_rate, unemployment
-            ]])
-            
-            with st.spinner("Analisando..."):
-                prediction = model.predict(input_data)[0]
-                probabilities = model.predict_proba(input_data)[0]
-                
-                # Mapear predição para rótulo
-                potential_labels = {0: 'Low', 1: 'Medium', 2: 'High'}
-                predicted_label = potential_labels[prediction]
-                
-                # Cores baseadas na predição
-                colors = {'Low': '#FF6B6B', 'Medium': '#F7931E', 'High': '#FFD23F'}
-                color = colors[predicted_label]
-                
-                # Mostrar resultado
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f'''
-                    <h3 style="color: {color}; font-family: 'Inter', sans-serif; font-weight: 600; margin-bottom: 0.6rem;">🎯 Potential: {predicted_label}</h3>
-                    <div style="background: {color}; border-radius: 8px; padding: 0.6rem; margin: 0.3rem 0; border: 1px solid {color};">
-                        <p style="color: #FFFFFF; font-size: 0.75rem; margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">
-                            Confidence: {probabilities[prediction]:.1%}<br>
-                            Personalized Analysis
-                        </p>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                
-                with col2:
-                    # Probability chart
-                    prob_df = pd.DataFrame({
-                        'Potential': ['Low', 'Medium', 'High'],
-                        'Probability': probabilities
-                    })
-                    
-                    fig = px.bar(
-                        prob_df,
-                        x='Potential',
-                        y='Probability',
-                        title='Classification Probabilities',
-                        color='Probability',
-                        color_continuous_scale='Oranges'
-                    )
-                    
-                    fig.update_layout(
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        font_color='#FAFAFA'
-                    )
-                    
-                    st.plotly_chart(fig, width='stretch')
-                
-                # Show prediction interpretation
-                show_prediction_interpretation(predicted_label, probabilities[prediction])
 
-def show_batch_prediction(df, model):
-    """Batch Prediction via upload de arquivo CSV"""
-    st.markdown("### 📋 Batch Prediction")
-    st.markdown("Upload a CSV file with company data for bulk analysis:")
-    
-    # Template para download
-    st.markdown("#### 📄 Data Template")
-    st.markdown("Download the template below to see the expected data format:")
-    
-    # Criar template
-    template_data = {
-        'name': ['Empresa Exemplo 1', 'Empresa Exemplo 2'],
-        'country': ['United States', 'Brazil'],
-        'dividend_yield_ttm': [2.5, 3.0],
-        'earnings_ttm': [1000000.0, 2000000.0],
-        'marketcap': [1000000000.0, 2000000000.0],
-        'pe_ratio_ttm': [15.0, 12.0],
-        'revenue_ttm': [5000000000.0, 8000000000.0],
-        'price': [50.0, 75.0],
-        'gdp_per_capita_usd': [50000.0, 10000.0],
-        'gdp_growth_percent': [2.5, 1.7],
-        'inflation_percent': [2.5, 4.83],
-        'interest_rate_percent': [4.875, 12.25],
-        'unemployment_rate_percent': [3.7, 6.2],
-        'exchange_rate_to_usd': [1.0, 6.18],
-        'inflation': [-2.5, -4.83],
-        'interest_rate': [-4.875, -12.25],
-        'unemployment': [-3.7, -6.2]
-    }
-    
-    template_df = pd.DataFrame(template_data)
-    
-    # Botão para download do template
-    csv_template = template_df.to_csv(index=False)
-    st.download_button(
-        label="📥 Baixar Template CSV",
-        data=csv_template,
-        file_name="template_empresas.csv",
-        mime="text/csv"
-    )
-    
-    # Upload de arquivo
-    uploaded_file = st.file_uploader(
-        "Choose a CSV file:",
-        type="csv",
-        help="Upload a CSV file with company data following the template"
-    )
-    
-    if uploaded_file is not None:
-        try:
-            # Ler arquivo
-            batch_df = pd.read_csv(uploaded_file)
-            
-            # Validar colunas necessárias (15 features)
-            required_cols = [
-                'dividend_yield_ttm', 'earnings_ttm', 'marketcap', 'pe_ratio_ttm',
-                'revenue_ttm', 'price', 'gdp_per_capita_usd', 'gdp_growth_percent',
-                'inflation_percent', 'interest_rate_percent', 'unemployment_rate_percent',
-                'exchange_rate_to_usd', 'inflation', 'interest_rate', 'unemployment'
+class ModelInfoResponse(BaseModel):
+    model_type: str
+    params: dict
+    feature_order: List[str]
+
+
+POTENTIAL_LABELS = {0: "Low", 1: "Medium", 2: "High"}
+
+
+def _features_to_array(features: Features) -> np.ndarray:
+    """
+    Converte o modelo pydantic `Features` para o vetor numpy na ordem
+    esperada pelo modelo, exatamente como no Streamlit.
+    """
+    return np.array(
+        [
+            [
+                features.dividend_yield_ttm,
+                features.earnings_ttm,
+                features.marketcap,
+                features.pe_ratio_ttm,
+                features.revenue_ttm,
+                features.price,
+                features.gdp_per_capita_usd,
+                features.gdp_growth_percent,
+                features.inflation_percent,
+                features.interest_rate_percent,
+                features.unemployment_rate_percent,
+                features.exchange_rate_to_usd,
+                features.inflation,
+                features.interest_rate,
+                features.unemployment,
             ]
-            
-            missing_cols = [col for col in required_cols if col not in batch_df.columns]
-            
-            if missing_cols:
-                st.error(f"Missing required columns: {', '.join(missing_cols)}")
-            else:
-                st.success(f"✅ File loaded successfully! {len(batch_df)} companies found.")
-                
-                # Mostrar preview dos dados
-                st.markdown("#### 👀 Data Preview")
-                st.dataframe(batch_df.head(), width='stretch')
-                
-                # Botão para processar
-                if st.button("🚀 Processar Predictions", type="primary"):
-                    with st.spinner("Processing predictions..."):
-                        # Preparar dados para predição
-                        feature_cols = required_cols
-                        X_batch = batch_df[feature_cols].values
-                        
-                        # Fazer predições
-                        predictions = model.predict(X_batch)
-                        probabilities = model.predict_proba(X_batch)
-                        
-                        # Mapear predições
-                        potential_labels = {0: 'Low', 1: 'Medium', 2: 'High'}
-                        predicted_labels = [potential_labels[p] for p in predictions]
-                        
-                        # Criar DataFrame com resultados
-                        results_df = batch_df.copy()
-                        results_df['predicted_class'] = predictions
-                        results_df['predicted_potential'] = predicted_labels
-                        results_df['confidence'] = [probabilities[i][predictions[i]] for i in range(len(predictions))]
-                        
-                        # Adicionar probabilidades individuais
-                        results_df['prob_baixo'] = probabilities[:, 0]
-                        results_df['prob_medio'] = probabilities[:, 1]
-                        results_df['prob_alto'] = probabilities[:, 2]
-                        
-                        # Mostrar resultados
-                        st.markdown("#### 📊 Resultados das Predictions")
-                        
-                        # Estatísticas gerais
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        with col1:
-                            st.metric("Total Companies", len(results_df))
-                        
-                        with col2:
-                            high_potential = len(results_df[results_df['predicted_potential'] == 'High'])
-                            st.metric("High Potential", high_potential)
-                        
-                        with col3:
-                            medium_potential = len(results_df[results_df['predicted_potential'] == 'Medium'])
-                            st.metric("Medium Potential", medium_potential)
-                        
-                        with col4:
-                            low_potential = len(results_df[results_df['predicted_potential'] == 'Low'])
-                            st.metric("Low Potential", low_potential)
-                        
-                        # Gráfico de distribuição
-                        fig = px.pie(
-                            values=results_df['predicted_potential'].value_counts().values,
-                            names=results_df['predicted_potential'].value_counts().index,
-                            title="Growth Potential Distribution",
-                            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-                        )
-                        
-                        fig.update_layout(
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font_color='#FAFAFA'
-                        )
-                        
-                        st.plotly_chart(fig, width='stretch')
-                        
-                        # Tabela de resultados
-                        st.markdown("#### 📋 Results Table")
-                        st.dataframe(results_df, width='stretch')
-                        
-                        # Botão para download dos resultados
-                        csv_results = results_df.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Baixar Resultados CSV",
-                            data=csv_results,
-                            file_name="resultados_predicoes.csv",
-                            mime="text/csv"
-                        )
-        
-        except Exception as e:
-            st.error(f"Error processing file: {str(e)}")
-
-def show_prediction_interpretation(potential, confidence):
-    """Shows prediction result interpretation"""
-    st.markdown("#### 💡 Result Interpretation")
-    
-    if potential == 'High':
-        st.markdown("""
-        <div class="success-box">
-            <h4 style="color: #FFD23F; margin-bottom: 0.5rem;">🚀 High Growth Potential</h4>
-            <p>This company presents indicators that suggest <strong>high growth potential</strong>. 
-            The factors analyzed indicate favorable opportunities for investment and expansion.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    elif potential == 'Medium':
-        st.markdown("""
-        <div class="info-box">
-            <h4 style="color: #F7931E; margin-bottom: 0.5rem;">⚖️ Medium Growth Potential</h4>
-            <p>This company presents a <strong>moderate growth potential</strong>. 
-            There are opportunities, but also some challenges that should be considered in decision-making.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="warning-box">
-            <h4 style="color: #FF6B6B; margin-bottom: 0.5rem;">⚠️ Low Growth Potential</h4>
-            <p>This company presents indicators that suggest <strong>low growth potential</strong>. 
-            A more detailed analysis is recommended before significant investments.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Confidence indicator
-    if confidence > 0.8:
-        confidence_level = "Alta"
-        confidence_color = "#FFD23F"
-    elif confidence > 0.6:
-        confidence_level = "Média"
-        confidence_color = "#F7931E"
-    else:
-        confidence_level = "Baixa"
-        confidence_color = "#FF6B6B"
-    
-    st.markdown(f"""
-    <div style="background: rgba(255, 255, 255, 0.1); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-        <h4 style="color: {confidence_color}; margin-bottom: 0.5rem;">🎯 Nível de Confidence: {confidence_level}</h4>
-        <p>The model presents <strong>{confidence:.1%}</strong> confidence in this prediction.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-def show_insights(df, df_potencial):
-    """Mostra insights e análises avançadas"""
-    st.markdown('<h2 style="color: #FF6B35; font-family: \'Inter\', sans-serif; font-weight: 600; margin-bottom: 2rem;">💡 Advanced Insights and Analysis</h2>', unsafe_allow_html=True)
-
-    if df is None:
-        st.info("💡 **Advanced Insights will be available once the dataset is loaded.**")
-        st.info("This section provides detailed analysis of company data including geographic distribution, financial metrics, and growth patterns.")
-        st.info("Please wait for the data to load from GitHub.")
-        return
-
-    if 'pc_class' not in df.columns:
-        st.info("Classification data not available. Please run the classification pipeline first.")
-        return
-    
-    # Criar abas para diferentes tipos de insights
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🌍 Análise Geográfica", "📊 Análise Financeira", "🔍 Correlações", "📈 Tendências", "🎯 Insights Avançados"])
-    
-    with tab1:
-        show_geographic_insights(df)
-    
-    with tab2:
-        show_financial_insights(df)
-    
-    with tab3:
-        show_correlation_insights(df)
-    
-    with tab4:
-        show_trend_insights(df)
-    
-    with tab5:
-        show_advanced_insights(df)
-
-def show_geographic_insights(df):
-    """Advanced geographic insights"""
-    st.markdown("### 🌍 Detailed Geographic Analysis")
-    
-    # # Top countries by potential
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # # Distribution by country
-        country_counts = df['country'].value_counts().head(10)
-
-        # Create DataFrame for proper color mapping
-        country_df = pd.DataFrame({
-            'country': country_counts.index,
-            'count': country_counts.values,
-            'color': country_counts.values
-        })
-
-        fig = px.bar(
-            country_df,
-            x='count',
-            y='country',
-            orientation='h',
-            title="Top 10 Countries by Number of Companies",
-            color='color',
-            color_continuous_scale='Oranges'
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA',
-            yaxis=dict(autorange="reversed")
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    with col2:
-        # Potential médio por país
-        country_potential = df.groupby('country')['pc_class'].mean().sort_values(ascending=False).head(10)
-
-        # Create DataFrame for proper color mapping
-        potential_df = pd.DataFrame({
-            'country': country_potential.index,
-            'potential': country_potential.values,
-            'color': country_potential.values
-        })
-
-        fig = px.bar(
-            potential_df,
-            x='potential',
-            y='country',
-            orientation='h',
-            title="Top 10 Countries by Average Potential",
-            color='color',
-            color_continuous_scale='Viridis'
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA',
-            yaxis=dict(autorange="reversed")
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    # Análise detalhada por país
-    st.markdown("#### 📋 Detailed Analysis by Country")
-    
-    country_analysis = df.groupby('country').agg({
-        'pc_class': ['count', 'mean', 'std'],
-        'marketcap': ['mean', 'median'],
-        'revenue_ttm': ['mean', 'median'],
-        'pe_ratio_ttm': 'mean'
-    }).round(2)
-    
-    country_analysis.columns = [
-        'Total_Empresas', 'Potential_Medio', 'Potential_Desvio',
-        'Cap_Mercado_Media', 'Cap_Mercado_Mediana',
-        'Receita_Media', 'Receita_Mediana', 'PE_Ratio_Medio'
-    ]
-    country_analysis = country_analysis.sort_values('Total_Empresas', ascending=False)
-    
-    # Filtrar países com pelo menos 5 empresas
-    country_analysis_filtered = country_analysis[country_analysis['Total_Empresas'] >= 5]
-    
-    st.dataframe(country_analysis_filtered.head(15), width='stretch')
-    
-    # Mapa de calor por país e potencial
-    st.markdown("#### 🗺️ Mapa de Calor: Country vs Potential")
-    
-    # Criar pivot table para mapa de calor
-    pivot_data = df.groupby(['country', 'pc_class']).size().unstack(fill_value=0)
-    pivot_data = pivot_data[pivot_data.sum(axis=1) >= 5]  # Filtrar países com pelo menos 5 empresas
-    
-    fig = px.imshow(
-        pivot_data.values,
-        labels=dict(x="Potential", y="Country", color="Número de Empresas"),
-        x=['Low', 'Medium', 'High'],
-        y=pivot_data.index,
-        title="Distribuição de Potential por Country",
-        color_continuous_scale='Oranges'
-    )
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#FAFAFA'
-    )
-    
-    st.plotly_chart(fig, width='stretch')
-
-def show_financial_insights(df):
-    """Advanced financial insights"""
-    st.markdown("### 💰 Detailed Financial Analysis")
-    
-    # Métricas financeiras por potencial
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Box plot de capitalização por potencial
-        fig = px.box(
-            df, 
-            x='pc_class', 
-            y='marketcap',
-            title="Distribuição de Capitalization por Potential",
-            labels={'pc_class': 'Potential', 'marketcap': 'Capitalization (USD)'}
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    with col2:
-        # Box plot de receita por potencial
-        fig = px.box(
-            df, 
-            x='pc_class', 
-            y='revenue_ttm',
-            title="Distribuição de Receita por Potential",
-            labels={'pc_class': 'Potential', 'revenue_ttm': 'Receita TTM (USD)'}
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    # Análise de múltiplos por potencial
-    st.markdown("#### 📊 Financial Multiples Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # P/E Ratio by potential
-        fig = px.violin(
-            df[df['pe_ratio_ttm'] > 0],  # Filtrar P/E positivos
-            x='pc_class', 
-            y='pe_ratio_ttm',
-            title="P/E Ratio by Growth Potential",
-            labels={'pc_class': 'Potential', 'pe_ratio_ttm': 'P/E Ratio'}
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    with col2:
-        # Dividend Yield by potential
-        fig = px.violin(
-            df[df['dividend_yield_ttm'] > 0],  # Filtrar dividend yields positivos
-            x='pc_class', 
-            y='dividend_yield_ttm',
-            title="Dividend Yield by Growth Potential",
-            labels={'pc_class': 'Potential', 'dividend_yield_ttm': 'Dividend Yield (%)'}
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    # Estatísticas financeiras por potencial
-    st.markdown("#### 📈 Estatísticas Financeiras por Potential")
-    
-    financial_stats = df.groupby('pc_class').agg({
-        'marketcap': ['count', 'mean', 'median', 'std'],
-        'revenue_ttm': ['mean', 'median'],
-        'pe_ratio_ttm': ['mean', 'median'],
-        'dividend_yield_ttm': ['mean', 'median']
-    }).round(2)
-    
-    financial_stats.columns = [
-        'N_Empresas', 'Cap_Media', 'Cap_Mediana', 'Cap_Desvio',
-        'Receita_Media', 'Receita_Mediana',
-        'PE_Media', 'PE_Mediana',
-        'Dividend_Media', 'Dividend_Mediana'
-    ]
-    
-    # Renomear índices
-    financial_stats.index = ['Low Potential', 'Medium Potential', 'High Potential']
-    
-    st.dataframe(financial_stats, width='stretch')
-
-def show_correlation_insights(df):
-    """Advanced correlation insights"""
-    st.markdown("### 🔍 Advanced Correlation Analysis")
-    
-    # Matriz de correlação principal
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    correlation_matrix = df[numeric_cols].corr()
-    
-    fig = px.imshow(
-        correlation_matrix,
-        title="Complete Correlation Matrix",
-        color_continuous_scale='RdBu_r'
-    )
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#FAFAFA'
-    )
-    
-    st.plotly_chart(fig, width='stretch')
-    
-    # Correlations with growth potential
-    st.markdown("#### 🎯 Correlations with Growth Potential")
-    
-    # Calcular correlações com pc_class
-    correlations_with_potential = df[numeric_cols].corrwith(df['pc_class']).sort_values(ascending=False)
-    correlations_with_potential = correlations_with_potential.drop('pc_class')  # Remover auto-correlação
-
-    # Create DataFrame for proper color mapping
-    corr_df = pd.DataFrame({
-        'feature': correlations_with_potential.index,
-        'correlation': correlations_with_potential.values,
-        'color': correlations_with_potential.values
-    })
-
-    fig = px.bar(
-        corr_df,
-        x='correlation',
-        y='feature',
-        orientation='h',
-        title="Correlation with Growth Potential",
-        color='color',
-        color_continuous_scale='RdBu_r'
-    )
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#FAFAFA',
-        yaxis=dict(autorange="reversed")
-    )
-    
-    st.plotly_chart(fig, width='stretch')
-    
-    # Análise de correlações por potencial
-    st.markdown("#### 📊 Matriz de Correlação por Potential")
-    
-    potential_levels = ['Low', 'Medium', 'High']
-    
-    for i, level in enumerate(potential_levels):
-        st.markdown(f"**{level} Potential:**")
-        
-        # Filtrar dados por potencial
-        df_filtered = df[df['pc_class'] == i]
-        
-        if len(df_filtered) > 10:  # Só mostrar se houver dados suficientes
-            corr_matrix_level = df_filtered[numeric_cols].corr()
-            
-            fig = px.imshow(
-                corr_matrix_level,
-                title=f"Correlations - {level} Potential",
-                color_continuous_scale='RdBu_r'
-            )
-            
-            fig.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font_color='#FAFAFA'
-            )
-            
-            st.plotly_chart(fig, width='stretch')
-        else:
-            st.info(f"Insufficient data for {level} Potential analysis")
-
-def show_trend_insights(df):
-    """Trend insights"""
-    st.markdown("### 📈 Trend Analysis")
-    
-    # Scatter plots com tendências
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Market Cap vs Revenue
-        fig = px.scatter(
-            df,
-            x='revenue_ttm',
-            y='marketcap',
-            color='pc_class',
-            title="Capitalization vs Revenue",
-            labels={'revenue_ttm': 'Revenue TTM (USD)', 'marketcap': 'Capitalization (USD)', 'pc_class': 'Potential'},
-            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    with col2:
-        # P/E vs Dividend Yield
-        fig = px.scatter(
-            df,
-            x='dividend_yield_ttm',
-            y='pe_ratio_ttm',
-            color='pc_class',
-            title="Dividend Yield vs P/E Ratio",
-            labels={'dividend_yield_ttm': 'Dividend Yield (%)', 'pe_ratio_ttm': 'P/E Ratio', 'pc_class': 'Potential'},
-            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-    
-    # Análise de clusters
-    st.markdown("#### 🎯 Cluster Analysis")
-    
-    # Usar K-means para identificar clusters
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import StandardScaler
-    
-    # Selecionar features numéricas para clustering
-    clustering_features = ['marketcap', 'revenue_ttm', 'pe_ratio_ttm', 'dividend_yield_ttm']
-    df_cluster = df[clustering_features].dropna()
-    
-    if len(df_cluster) > 50:  # Só fazer clustering se houver dados suficientes
-        # Normalizar dados
-        scaler = StandardScaler()
-        df_scaled = scaler.fit_transform(df_cluster)
-        
-        # Aplicar K-means
-        kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(df_scaled)
-        
-        # Adicionar clusters ao dataframe
-        df_cluster = df_cluster.copy()
-        df_cluster['cluster'] = clusters
-        
-        # Visualizar clusters
-        fig = px.scatter(
-            df_cluster,
-            x='marketcap',
-            y='revenue_ttm',
-            color='cluster',
-            title="Company Clusters (Market Cap vs Revenue)",
-            labels={'marketcap': 'Capitalization (USD)', 'revenue_ttm': 'Revenue TTM (USD)', 'cluster': 'Cluster'},
-            color_discrete_sequence=['#FF6B6B', '#F7931E', '#FFD23F']
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font_color='#FAFAFA'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
-        
-        # Estatísticas dos clusters
-        st.markdown("#### 📊 Características dos Clusters")
-        cluster_stats = df_cluster.groupby('cluster')[clustering_features].mean().round(2)
-        cluster_stats.index = ['Cluster 1', 'Cluster 2', 'Cluster 3']
-        st.dataframe(cluster_stats, width='stretch')
-    else:
-        st.info("Dados insuficientes para análise de clusters")
-
-def show_advanced_insights(df):
-    """Advanced insights and recommendations"""
-    st.markdown("### 🎯 Insights Avançados e Recomendações")
-    
-    # Análise de outliers
-    st.markdown("#### 🔍 Outlier Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Outliers em Market Cap
-        Q1 = df['marketcap'].quantile(0.25)
-        Q3 = df['marketcap'].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        
-        outliers_marketcap = df[(df['marketcap'] < lower_bound) | (df['marketcap'] > upper_bound)]
-        
-        st.metric("Outliers em Capitalization", len(outliers_marketcap))
-        
-        if len(outliers_marketcap) > 0:
-            st.markdown("**Top 5 Outliers:**")
-            top_outliers = outliers_marketcap.nlargest(5, 'marketcap')[['name', 'country', 'marketcap', 'pc_class']]
-            st.dataframe(top_outliers, width='stretch')
-    
-    with col2:
-        # Outliers em P/E Ratio
-        Q1_pe = df[df['pe_ratio_ttm'] > 0]['pe_ratio_ttm'].quantile(0.25)
-        Q3_pe = df[df['pe_ratio_ttm'] > 0]['pe_ratio_ttm'].quantile(0.75)
-        IQR_pe = Q3_pe - Q1_pe
-        upper_bound_pe = Q3_pe + 1.5 * IQR_pe
-        
-        outliers_pe = df[(df['pe_ratio_ttm'] > 0) & (df['pe_ratio_ttm'] > upper_bound_pe)]
-        
-        st.metric("Outliers em P/E Ratio", len(outliers_pe))
-        
-        if len(outliers_pe) > 0:
-            st.markdown("**Top 5 Outliers:**")
-            top_outliers_pe = outliers_pe.nlargest(5, 'pe_ratio_ttm')[['name', 'country', 'pe_ratio_ttm', 'pc_class']]
-            st.dataframe(top_outliers_pe, width='stretch')
-    
-    # Análise de performance por setor (simulado)
-    st.markdown("#### 🏭 Performance Analysis by Characteristics")
-    
-    # Simular setores baseado em características
-    df['sector'] = pd.cut(df['marketcap'], 
-                         bins=[0, 1e9, 10e9, float('inf')], 
-                         labels=['Small Cap', 'Mid Cap', 'Large Cap'])
-    
-    sector_performance = df.groupby('sector')['pc_class'].agg(['count', 'mean', 'std']).round(2)
-    sector_performance.columns = ['N_Empresas', 'Potential_Medio', 'Potential_Desvio']
-    
-    st.dataframe(sector_performance, width='stretch')
-    
-    # Recomendações baseadas em dados
-    st.markdown("#### 💡 Recomendações Baseadas em Dados")
-    
-    # Calcular métricas para recomendações
-    high_potential = df[df['pc_class'] == 2]
-    
-    if len(high_potential) > 0:
-        avg_market_cap_high = high_potential['marketcap'].mean()
-        avg_revenue_high = high_potential['revenue_ttm'].mean()
-        avg_pe_high = high_potential[high_potential['pe_ratio_ttm'] > 0]['pe_ratio_ttm'].mean()
-        
-        # Empresas com características similares
-        similar_companies = df[
-            (df['marketcap'] >= avg_market_cap_high * 0.5) & 
-            (df['marketcap'] <= avg_market_cap_high * 2.0) &
-            (df['revenue_ttm'] >= avg_revenue_high * 0.5) & 
-            (df['revenue_ttm'] <= avg_revenue_high * 2.0) &
-            (df['pc_class'] != 2)  # Excluir as que já são alto potencial
         ]
-        
-        if len(similar_companies) > 0:
-            st.markdown("**🚀 Empresas com Potential de Upgrade:**")
-            st.markdown(f"Encontradas {len(similar_companies)} empresas com características similares às de alto potencial:")
-            
-            # Mostrar top 10 empresas similares
-            top_similar = similar_companies.nlargest(10, 'marketcap')[
-                ['name', 'country', 'marketcap', 'revenue_ttm', 'pe_ratio_ttm', 'pc_class']
-            ]
-            st.dataframe(top_similar, width='stretch')
-            
-            st.markdown("""
-            <div class="success-box">
-                <h4 style="color: #FFD23F; margin-bottom: 0.5rem;">💡 Insight</h4>
-                <p>Estas empresas apresentam características financeiras similares às empresas de alto potencial 
-                e podem ser candidatas a upgrade na classificação com melhorias operacionais.</p>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Resumo executivo
-    st.markdown("#### 📋 Resumo Executivo")
-    
-    total_companies = len(df)
-    high_potential_pct = len(df[df['pc_class'] == 2]) / total_companies * 100
-    avg_market_cap = df['marketcap'].mean() / 1e9
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("Total Companies", f"{total_companies:,}")
-    
-    with col2:
-        st.metric("High Potential", f"{high_potential_pct:.1f}%")
-    
-    with col3:
-        st.metric("Cap. Média", f"${avg_market_cap:.1f}B")
-    
-    # Final insights
-    st.markdown("""
-    <div class="info-box">
-        <h4 style="color: #FF6B35; margin-bottom: 0.5rem;">🎯 Main Insights</h4>
-        <ul>
-            <li><strong>Geographic Diversification:</strong> The dataset presents companies from multiple countries with different potential profiles.</li>
-            <li><strong>Financial Correlations:</strong> There are significant correlations between financial indicators and growth potential.</li>
-            <li><strong>Investment Opportunities:</strong> Companies with characteristics similar to high potential ones may represent opportunities.</li>
-            <li><strong>Risk Analysis:</strong> Outlier identification helps in risk and opportunity assessment.</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    )
+
+
+def _proba_to_result(pred_class: int, proba: np.ndarray) -> PredictionResult:
+    return PredictionResult(
+        predicted_class=int(pred_class),
+        predicted_potential=POTENTIAL_LABELS.get(int(pred_class), "Low"),  # fallback
+        confidence=float(proba[int(pred_class)]),
+        prob_low=float(proba[0]),
+        prob_medium=float(proba[1]),
+        prob_high=float(proba[2]),
+    )
+
+
+@app.get("/health", response_model=HealthResponse, tags=["system"])
+def health_check() -> HealthResponse:
+    """
+    Verificação simples de saúde da API.
+    """
+    n_rows = int(EXAMPLE_DF.shape[0]) if EXAMPLE_DF is not None else None
+    return HealthResponse(status="ok", model_loaded=MODEL is not None, n_example_rows=n_rows)
+
+
+@app.get("/model-info", response_model=ModelInfoResponse, tags=["model"])
+def model_info() -> ModelInfoResponse:
+    """
+    Retorna informações básicas sobre o modelo e a ordem das features.
+    """
+    if MODEL is None:
+        raise HTTPException(status_code=503, detail="Modelo não carregado.")
+
+    feature_order = [
+        "dividend_yield_ttm",
+        "earnings_ttm",
+        "marketcap",
+        "pe_ratio_ttm",
+        "revenue_ttm",
+        "price",
+        "gdp_per_capita_usd",
+        "gdp_growth_percent",
+        "inflation_percent",
+        "interest_rate_percent",
+        "unemployment_rate_percent",
+        "exchange_rate_to_usd",
+        "inflation",
+        "interest_rate",
+        "unemployment",
+    ]
+
+    params = MODEL.get_params() if hasattr(MODEL, "get_params") else {}
+
+    return ModelInfoResponse(
+        model_type=MODEL.__class__.__name__,
+        params=params,
+        feature_order=feature_order,
+    )
+
+
+@app.post("/predict", response_model=PredictionResult, tags=["prediction"])
+def predict(features: Features) -> PredictionResult:
+    """
+    Previsão individual (um registro por vez).
+    """
+    if MODEL is None:
+        raise HTTPException(status_code=503, detail="Modelo não carregado.")
+
+    try:
+        X = _features_to_array(features)
+        pred = MODEL.predict(X)[0]
+        if hasattr(MODEL, "predict_proba"):
+            proba = MODEL.predict_proba(X)[0]
+        else:
+            # Se o modelo não suportar probabilidades, cria distribuição dummy
+            proba = np.zeros(3, dtype=float)
+            proba[int(pred)] = 1.0
+
+        return _proba_to_result(int(pred), proba)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao realizar previsão: {e}")
+
+
+@app.post("/predict-batch", response_model=BatchPredictionResult, tags=["prediction"])
+def predict_batch(request: BatchRequest) -> BatchPredictionResult:
+    """
+    Previsão em batch.
+
+    Envie uma lista de instâncias no campo `instances`, cada uma com as mesmas
+    features usadas no endpoint `/predict`.
+    """
+    if MODEL is None:
+        raise HTTPException(status_code=503, detail="Modelo não carregado.")
+
+    if not request.instances:
+        raise HTTPException(status_code=400, detail="Lista de instâncias vazia.")
+
+    try:
+        X_list = [_features_to_array(instance)[0] for instance in request.instances]
+        X = np.vstack(X_list)
+
+        preds = MODEL.predict(X)
+        if hasattr(MODEL, "predict_proba"):
+            probas = MODEL.predict_proba(X)
+        else:
+            probas = np.zeros((len(preds), 3), dtype=float)
+            for i, c in enumerate(preds):
+                probas[i, int(c)] = 1.0
+
+        results = [_proba_to_result(int(c), probas[i]) for i, c in enumerate(preds)]
+        return BatchPredictionResult(predictions=results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao realizar previsões em batch: {e}")
+
+
+@app.get("/", tags=["system"])
+def root():
+    """
+    Endpoint raiz simples com link para documentação.
+    """
+    return {
+        "message": "Business Growth Potential API",
+        "docs": "/docs",
+        "redoc": "/redoc",
+    }
+
 
 if __name__ == "__main__":
-    main()
+    # Execução local (desenvolvimento):
+    # uvicorn app:app --reload
+    import uvicorn
+
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), reload=True)
+
+
